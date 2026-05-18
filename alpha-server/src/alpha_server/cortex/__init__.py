@@ -6,10 +6,10 @@ against the shared instance). Mounting `mcp.http_app(...)` inside the
 FastAPI app picks up the full tool surface.
 """
 
-from alpha_server.cortex import add_to_diary, get_schema, read_from_diary
+from alpha_server.cortex import add_to_diary, execute_query, get_schema, read_from_diary
 from alpha_server.cortex.server import mcp
 
 # Side-effect imports — silence the unused-import warnings.
-_ = (add_to_diary, get_schema, read_from_diary)
+_ = (add_to_diary, execute_query, get_schema, read_from_diary)
 
 __all__ = ["mcp"]
