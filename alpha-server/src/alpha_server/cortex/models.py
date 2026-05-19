@@ -55,3 +55,12 @@ class StoreResult(BaseModel):
 
     id: int = Field(description="The id of the newly-stored memory.")
     created_at: str = Field(description="When the memory was stored (PSO-8601, local time).")
+
+
+class Memory(BaseModel):
+    """A single memory row from cortex.memories."""
+
+    id: int = Field(description="The memory id.")
+    content: str = Field(description="The memory text.")
+    created_at: str = Field(description="When the memory was stored (PSO-8601, local time).")
+    age: str = Field(description="How long ago the memory was stored.")

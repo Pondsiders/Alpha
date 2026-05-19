@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
+import dateparser
 import pendulum
 
 from alpha_server.settings import get_settings
@@ -42,6 +43,29 @@ def start_of_day(dt: datetime | pendulum.DateTime) -> pendulum.DateTime:
     if local < opening:
         opening = opening.subtract(days=1)
     return opening
+
+
+def parse_when(value: str) -> datetime | None:
+    """Parse a human or ISO 8601 date/time string into a timezone-aware datetime.
+
+    Accepts ISO 8601 ("2025-05-07T12:00:00"), explicit dates ("May 7 2025"),
+    and natural language ("yesterday", "two weeks ago"). Strings are resolved
+    in `LOCAL_TZ`. Ambiguous relative phrases prefer past dates.
+
+    Args:
+        value: The user-supplied date string.
+
+    Returns:
+        A timezone-aware datetime, or None if the string can't be parsed.
+    """
+    return dateparser.parse(
+        value,
+        settings={
+            "TIMEZONE": LOCAL_TZ,
+            "RETURN_AS_TIMEZONE_AWARE": True,
+            "PREFER_DATES_FROM": "past",
+        },
+    )
 
 
 def pso8601(dt: datetime | pendulum.DateTime) -> str:

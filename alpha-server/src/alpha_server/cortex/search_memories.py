@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Annotated, Literal
 
-import dateparser
 import numpy as np
 from fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
@@ -45,30 +44,8 @@ _INDEX_ORDER = " ORDER BY score DESC LIMIT "
 
 
 def _parse_when(value: str, *, label: str) -> datetime:
-    """Parse a date/time string into a timezone-aware datetime.
-
-    Accepts ISO 8601, natural language ("yesterday", "two weeks ago"),
-    and explicit dates ("May 7 2025"). Strings are resolved in the
-    server's configured local timezone.
-
-    Args:
-        value: The user-supplied date string.
-        label: Which parameter this came from, for the error message.
-
-    Returns:
-        A timezone-aware datetime.
-
-    Raises:
-        ToolError: If the string can't be parsed as a date.
-    """
-    parsed = dateparser.parse(
-        value,
-        settings={
-            "TIMEZONE": clock.LOCAL_TZ,
-            "RETURN_AS_TIMEZONE_AWARE": True,
-            "PREFER_DATES_FROM": "past",
-        },
-    )
+    """Parse a date/time string or raise ToolError with a label."""
+    parsed = clock.parse_when(value)
     if parsed is None:
         msg = f"could not parse {label}={value!r} as a date"
         raise ToolError(msg)
