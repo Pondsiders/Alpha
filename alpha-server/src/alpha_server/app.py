@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING
 import redis.asyncio as redis
 from fastapi import FastAPI
 
-from alpha_server.auth import BearerTokenMiddleware
 from alpha_server.cortex import mcp
 
 # Side-effect imports register handlers against the shared hooks router.
@@ -55,7 +54,6 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
 
 app = FastAPI(lifespan=_lifespan)
-app.add_middleware(BearerTokenMiddleware)
 app.mount("/cortex", _cortex_app)
 app.include_router(hooks_router, prefix="/hooks")
 

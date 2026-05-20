@@ -42,11 +42,11 @@ uv run basedpyright
 
 ## Architecture
 
-`alpha_server.app:app` is a single FastAPI app that mounts two distinct surfaces behind one bearer-token middleware:
+`alpha_server.app:app` is a single FastAPI app that mounts two distinct surfaces:
 
 - **`/cortex/mcp`** — a FastMCP server exposing memory/diary tools to the Alpha client over Streamable HTTP. Built by `mcp.http_app(path="/mcp")` and mounted as a sub-ASGI app; its lifespan is composed into the outer FastAPI lifespan (omitting this hand-off causes tool calls to hang).
 - **`/hooks/*`** — Claude Code hook endpoints. `/hooks/timestamp` and `/hooks/memories` are `UserPromptSubmit` hooks that return `additionalContext` strings. `/hooks/reflection` is a `Stop` hook with a different envelope shape: it returns `{"decision": "block", "reason": ...}` to fire a between-turns reminder (Stop hooks don't use `additionalContext`). The reflection handler must short-circuit when `stop_hook_active=true` to avoid recursion.
-- **`/livez`** — the one route that bypasses auth (see `_PUBLIC_PATHS` in `auth.py`).
+- **`/livez`** — an unauthenticated health check.
 
 ### Side-effect registration pattern
 
@@ -78,10 +78,6 @@ Two patterns, both process-singleton, both shared by hooks and MCP tools:
 ### Settings
 
 `settings.py` uses Pydantic Settings; `get_settings()` is `lru_cache`'d. The `.env` file is resolved relative to `settings.py` (three parents up = repo root), and `extra="forbid"` means a stray env var will fail startup loudly. All required env vars are listed as fields on the `Settings` class.
-
-### Auth
-
-`BearerTokenMiddleware` (Starlette base middleware) compares `Authorization: Bearer <token>` against `AUTH_TOKEN` with `hmac.compare_digest`. Implemented as Starlette middleware (not a FastAPI dependency) so it applies uniformly to both the FastAPI routes and the mounted FastMCP sub-app.
 
 ## Conventions
 

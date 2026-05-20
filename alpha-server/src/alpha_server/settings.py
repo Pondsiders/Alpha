@@ -29,7 +29,6 @@ class Settings(BaseSettings):
         extra="forbid",
     )
 
-    auth_token: str
     chat_api_key: str
     chat_base_url: HttpUrl
     chat_model: str
