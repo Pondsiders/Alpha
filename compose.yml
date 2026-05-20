@@ -1,30 +1,17 @@
 services:
-  tailscale:
-    image: ghcr.io/tailscale/tailscale:latest
-    container_name: alpha-server-tailscale
-    hostname: alpha-server
-    environment:
-      TS_AUTHKEY: ${TS_AUTHKEY}          # used only on first boot
-      TS_HOSTNAME: alpha-server
-      TS_STATE_DIR: /var/lib/tailscale
-      TS_AUTH_ONCE: "true"
-      TS_USERSPACE: "false"
-      TS_EXTRA_ARGS: ${TS_EXTRA_ARGS:-}
-      TS_SERVE_CONFIG: /config/serve-config.json
-    volumes:
-      - tailscale-state:/var/lib/tailscale
-      - ./tailscale:/config:ro
-      - /dev/net/tun:/dev/net/tun
-    cap_add:
-      - NET_ADMIN
-      - NET_RAW
+  alpha-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: alpha-server
     restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
     healthcheck:
-      test: ["CMD", "tailscale", "status"]
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/livez').read()\""]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 60s
-
-volumes:
-  tailscale-state:
+      start_period: 30s

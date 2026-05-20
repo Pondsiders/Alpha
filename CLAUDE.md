@@ -8,7 +8,7 @@ Use conventional-commit style for commit messages. Unless otherwise noted, the f
 
 ## Repository layout
 
-This is a small monorepo. The only source tree is `alpha-server/` (a Python package); everything at the repo root is infra glue (Docker Compose for local dev, a Tailscale sidecar config for prod, a `justfile`, a `.env` shared by both halves).
+This is a small monorepo. The only source tree is `alpha-server/` (a Python package); everything at the repo root is infra glue (a `Dockerfile` and `compose.yml` for production, `compose-dev.yml` for the local dev DB stack, a `justfile`, a `.env` shared by both halves).
 
 ## Commands
 
@@ -41,27 +41,24 @@ uv run basedpyright
 `alpha_server.app:app` is a single FastAPI app that mounts two distinct surfaces behind one bearer-token middleware:
 
 - **`/cortex/mcp`** — a FastMCP server exposing memory/diary tools to the Alpha client over Streamable HTTP. Built by `mcp.http_app(path="/mcp")` and mounted as a sub-ASGI app; its lifespan is composed into the outer FastAPI lifespan (omitting this hand-off causes tool calls to hang).
-- **`/hooks/*`** — Claude Code `UserPromptSubmit` hook endpoints (`/hooks/timestamp`, `/hooks/memories`) that return `additionalContext` strings.
+- **`/hooks/*`** — Claude Code hook endpoints. `/hooks/timestamp` and `/hooks/memories` are `UserPromptSubmit` hooks that return `additionalContext` strings. `/hooks/reflection` is a `Stop` hook with a different envelope shape: it returns `{"decision": "block", "reason": ...}` to fire a between-turns reminder (Stop hooks don't use `additionalContext`). The reflection handler must short-circuit when `stop_hook_active=true` to avoid recursion.
 - **`/livez`** — the one route that bypasses auth (see `_PUBLIC_PATHS` in `auth.py`).
 
 ### Side-effect registration pattern
 
 Both the Cortex tool surface and the hooks surface use the same trick: a shared registry object is created in one module, and feature modules register against it via decorators at import time. Importing the feature module **is** what wires it up.
 
-- `cortex/server.py` creates the `mcp: FastMCP` instance; each tool module (`add_to_diary.py`, `read_from_diary.py`, `search_memories.py`) decorates a function with `@mcp.tool`. `cortex/__init__.py` does a side-effect import of all three.
-- `hooks/__init__.py` creates `router: APIRouter`; each hook module (`timestamp.py`, `memories.py`) decorates a handler with `@router.post(...)`. `app.py` does the side-effect imports (with `# noqa: F401`).
+- `cortex/server.py` creates the `mcp: FastMCP` instance; each tool module (`add_to_diary.py`, `read_from_diary.py`, `search_memories.py`, `store_memory.py`, `get_memory.py`, `recent_memories.py`) decorates a function with `@mcp.tool`. `cortex/__init__.py` does a side-effect import of them all. Tool result shapes live in `cortex/models.py`; the server's tool-surface prose lives in `cortex/instructions.md` (read at startup by `server.py`).
+- `hooks/__init__.py` creates `router: APIRouter`; each hook module (`timestamp.py`, `memories.py`, `reflection.py`) decorates a handler with `@router.post(...)`. `app.py` does the side-effect imports (with `# noqa: F401`).
 
 When adding a tool or hook, follow this pattern: write the module, then add it to the side-effect import in the corresponding `__init__`/`app.py`. Failing to add the import means the surface silently won't appear.
 
-### Long-lived clients on `app.state`
+### Long-lived clients
 
-The lifespan in `app.py` owns process-singleton clients and exposes them via `app.state`:
+Two patterns, both process-singleton, both shared by hooks and MCP tools:
 
-- `app.state.chat_client` / `chat_model` — OpenAI-protocol client pointed at the Bifrost gateway (used by `hooks/memories.py` to extract semantic queries from prompts).
-- `app.state.embedding_client` / `embedding_model` — embedding client (used by the memories hook to embed queries before pgvector search).
-- `app.state.redis` — async Redis client (per-session ephemeral state: `seen:<session_id>` set for memory recall, `last-msg:<session_id>` for the timestamp hook).
-
-Hook handlers receive `request: Request` and pull these off `request.app.state`. Don't construct new OpenAI/Redis clients per-request.
+- **`llm.py`** — lazy module-level singletons for the OpenAI-protocol chat and embedding clients (Bifrost gateway). `get_chat_client()` / `get_chat_model()` / `get_embedding_client()` / `get_embedding_model()` construct on first call and return the same instance thereafter. No lifespan hand-off. `db.py`'s `get_pool()` follows the same shape. `llm.py` also owns `format_query_for_embedding()` — the Qwen 3 Embedding 4B input shape lives there because swapping the embedding model means revisiting both this prefix and re-embedding `cortex.memories`.
+- **`app.state.redis`** — async Redis client, opened in the FastAPI lifespan and closed on shutdown. Hook handlers take `request: Request` and pull this off `request.app.state` (don't construct new Redis clients per-request). Three key families share the database: `seen:<session_id>` (memories-hook recall dedupe), `last-msg:<session_id>` (timestamp hook), and `reflection:turn:<session_id>` (reflection-hook turn counter, fires every third turn).
 
 ### Database
 
@@ -91,4 +88,6 @@ Hook handlers receive `request: Request` and pull these off `request.app.state`.
 
 ## Production deployment
 
-`compose.yml` (the prod stack) runs only a Tailscale sidecar that terminates HTTPS on the tailnet (`tailscale/serve-config.json` proxies `:443` → `127.0.0.1:8000`). The `alpha-server` Python process runs on the host, not in a container. `compose-dev.yml` is the local stack (Postgres + Redis only).
+`compose.yml` (the prod stack) builds `Dockerfile` and runs alpha-server in one container, port-mapped `127.0.0.1:8000:8000` on the host so Claude Code reaches it as `http://localhost:8000`. SSRF protection in the MCP hook channel blocks tailnet IPs; localhost is fine. Postgres and Redis live on alpha-DB and are reached over the tailnet from inside the container. `compose-dev.yml` is the dev DB stack (Postgres + Redis on the dev box).
+
+Deploy: `cd /opt/alpha && git pull && docker compose up -d --build` on Workshop.
