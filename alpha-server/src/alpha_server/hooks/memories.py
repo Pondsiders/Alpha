@@ -29,7 +29,7 @@ from alpha_server.hooks import router
 if TYPE_CHECKING:
     import redis.asyncio as redis
 
-_EXTRACT_QUERIES_PROMPT = (Path(__file__).parent / "memories_extract_queries.md").read_text(
+_SYSTEM_PROMPT = (Path(__file__).parent / "memories_system_prompt.md").read_text(
     encoding="utf-8"
 )
 
@@ -90,7 +90,7 @@ async def _run(prompt: str, session_id: str, request: Request) -> str:
         chat_response = await chat_client.chat.completions.create(
             model=llm.get_chat_model(),
             messages=[
-                {"role": "system", "content": _EXTRACT_QUERIES_PROMPT},
+                {"role": "system", "content": _SYSTEM_PROMPT},
                 {"role": "user", "content": prompt},
             ],
             temperature=0.7,
