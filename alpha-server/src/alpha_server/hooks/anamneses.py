@@ -50,6 +50,7 @@ _SYSTEM_PROMPT = (Path(__file__).parent / "anamneses_system_prompt.md").read_tex
 _TOP_K_PER_QUERY = 1
 _MIN_COSINE = 0.1
 _SEEN_TTL_SECONDS = 7 * 24 * 60 * 60  # one week
+_MAX_OUTPUT_CHARS = 9990  # Claude Code caps additionalContext at 10K; leave headroom.
 
 _SEARCH_SQL = """
 SELECT id,
@@ -197,8 +198,9 @@ async def _run(prompt: str, session_id: str, request: Request) -> str:
         _ = pipe.expire(seen_key, _SEEN_TTL_SECONDS)
         _ = await pipe.execute()
 
-    # 7. Format as `## Memory #...` blocks with bulleted metadata.
+    # 7. Format as `## Memory #...` blocks.
     blocks: list[str] = []
+    total = 0
     for m in merged:
         lines = [
             f"## Memory #{m['id']}",
@@ -210,5 +212,46 @@ async def _run(prompt: str, session_id: str, request: Request) -> str:
             "",
             m["content"],
         ]
-        blocks.append("\n".join(lines))
+        block = "\n".join(lines)
+        sep_len = 2 if blocks else 0  # "\n\n" between blocks
+        if total + len(block) + sep_len > _MAX_OUTPUT_CHARS:
+            if not blocks:
+                logfire.error(
+                    "recall.truncated.hard_slice",
+                    queries=queries,
+                    memory_id=m["id"],
+                    query=m["query"],
+                    q_idx=m["q_idx"],
+                    score=round(m["score"], 3),
+                    block_chars=len(block),
+                    max_chars=_MAX_OUTPUT_CHARS,
+                )
+                return block[:_MAX_OUTPUT_CHARS]
+            logfire.error(
+                "recall.truncated.dropped",
+                queries=queries,
+                kept=[
+                    {
+                        "id": x["id"],
+                        "q_idx": x["q_idx"],
+                        "query": x["query"],
+                        "score": round(x["score"], 3),
+                    }
+                    for x in merged[: len(blocks)]
+                ],
+                dropped=[
+                    {
+                        "id": x["id"],
+                        "q_idx": x["q_idx"],
+                        "query": x["query"],
+                        "score": round(x["score"], 3),
+                    }
+                    for x in merged[len(blocks) :]
+                ],
+                chars_used=total,
+                max_chars=_MAX_OUTPUT_CHARS,
+            )
+            break
+        blocks.append(block)
+        total += len(block) + sep_len
     return "\n\n".join(blocks)
