@@ -19,8 +19,9 @@ from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import logfire
 import numpy as np
-from fastapi import Request
-from pydantic import BaseModel, ConfigDict, Field
+from fastapi import Request, Response
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, ConfigDict
 
 from alpha_server import clock, llm
 from alpha_server.db import get_pool
@@ -60,21 +61,25 @@ class HookEnvelope(BaseModel):
     model_config: ClassVar[ConfigDict] = ConfigDict(extra="ignore")
 
 
-class HookResponse(BaseModel):
-    """The hook response shape Claude Code expects."""
-
-    hook_specific_output: dict[str, str] = Field(serialization_alias="hookSpecificOutput")
-
-
 @router.post("/memories")
-async def memories(envelope: HookEnvelope, request: Request) -> HookResponse:
-    """Run the recall pipeline; return matched memories as additionalContext."""
+async def memories(envelope: HookEnvelope, request: Request) -> Response:
+    """Run the recall pipeline; return matched memories as additionalContext.
+
+    Returns a 200 with empty body when there's nothing to inject — the
+    documented no-op shape (per Claude Code hooks reference). Returning
+    `additionalContext: ""` is not documented as silent; the empty-body
+    path is.
+    """
     with logfire.span("hooks.memories {session_id}", session_id=envelope.session_id):
         additional_context = await _run(envelope.prompt, envelope.session_id, request)
-    return HookResponse(
-        hook_specific_output={
-            "hookEventName": "UserPromptSubmit",
-            "additionalContext": additional_context,
+    if not additional_context:
+        return Response(status_code=200)
+    return JSONResponse(
+        content={
+            "hookSpecificOutput": {
+                "hookEventName": "UserPromptSubmit",
+                "additionalContext": additional_context,
+            }
         }
     )
 
