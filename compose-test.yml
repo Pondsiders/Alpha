@@ -1,4 +1,4 @@
-name: alpha-test
+name: mechanism-test
 
 # Isolated Postgres + Redis stack for the pytest suite.
 # Tests run on the host (uvicorn never enters this picture); these services

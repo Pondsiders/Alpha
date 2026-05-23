@@ -1,4 +1,4 @@
-name: alpha-dev
+name: mechanism-dev
 
 services:
   mechanism:
@@ -46,15 +46,14 @@ services:
 
   postgres:
     image: pgvector/pgvector:pg17
-    container_name: alpha-dev-postgres
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: postgres
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
-      - alpha-dev-pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 2s
@@ -63,11 +62,10 @@ services:
 
   redis:
     image: redis:8-alpine
-    container_name: alpha-dev-redis
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
-      - alpha-dev-redis:/data
+      - redis-data:/data
     command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -76,5 +74,5 @@ services:
       retries: 15
 
 volumes:
-  alpha-dev-pgdata:
-  alpha-dev-redis:
+  pgdata:
+  redis-data:
