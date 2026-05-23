@@ -30,8 +30,6 @@ dev = [
     "respx>=0.22",
     "ruff>=0.6",
     "asyncpg-stubs>=0.31",
-    "pyyaml>=6.0.3",
-    "types-pyyaml>=6.0.12.20260518",
 ]
 
 [build-system]

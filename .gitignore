@@ -19,7 +19,3 @@ scratch/
 
 # per-checkout Docker Compose override (see compose.override.yml.example)
 compose.override.yml
-
-# eval dataset content (real prompts from scribe.messages); seed_cases.yaml
-# is committed so the dataset is reconstructable via extract_dataset.py.
-mechanism/evals/data/
