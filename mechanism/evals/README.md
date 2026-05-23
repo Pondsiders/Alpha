@@ -16,9 +16,12 @@ or extending the pipeline (e.g. an `/hooks/asides` companion).
 - **dataset**: hand-curated conversational prompts pulled from our
   conversation history (Jeffery's real prompts, not synthetic), each labeled
   with the topics the extract step *should* surface.
-- **scoring**: for each labeled topic, mark a hit if any extracted query has
-  cosine similarity above τ against the topic string (Qwen 3 Embedding 4B,
-  same model production uses).
+- **scoring**: two scores per case on different scales, deliberately not
+  summed. Score(+) is the sum of best-match cosines over expected topics that
+  hit at threshold τ (bounded `[0, N_expected_topics]`, measures correctness).
+  Score(−) is the count of extracted queries that didn't match any expected
+  topic (bounded `[0, ∞)`, measures over-extraction). Embeddings via Qwen 3
+  Embedding 4B, the same model production uses.
 - **stratification**: cases are bucketed by topic-count so per-stratum scores
   surface improvements on the multi-topic failure mode that aggregate scores
   would dilute.
@@ -38,6 +41,7 @@ evals/
 ├── README.md              ← this file
 ├── seed_cases.yaml        ← committed: source-database row ids + hand-curated labels
 ├── extract_dataset.py     ← committed: seed_cases.yaml + source DB → data/dataset.yaml
+├── run_eval.py            ← committed: prompt + dataset → cosine-sim scores → data/results.db
 ├── prompts/
 │   └── v1-baseline.md     ← committed: snapshot of the current production prompt
 └── data/                  ← gitignored: real prompt content + scoring results
@@ -52,18 +56,26 @@ conversational prompts from our history, pulled from a private DB.
 
 ## Bootstrap
 
-From the repo root:
+From `mechanism/`:
 
 ```sh
-cd mechanism && uv sync
+uv sync
 EVAL_SOURCE_DATABASE_URL=postgresql://... uv run python evals/extract_dataset.py
+LOGFIRE_IGNORE_NO_CONFIG=1 uv run python evals/run_eval.py evals/prompts/v1-baseline.md
 ```
 
-`EVAL_SOURCE_DATABASE_URL` is required — the script fails loud if unset. Point
-it at a Postgres URL with read access to the conversation history table this
-eval draws from.
+`EVAL_SOURCE_DATABASE_URL` is required for extraction — the script fails loud
+if unset. Point it at a Postgres URL with read access to the conversation
+history table this eval draws from.
 
-The runner, scorer, and comparison tool are not yet implemented; this is the
-extraction half of the harness.
+`LOGFIRE_IGNORE_NO_CONFIG=1` for the runner suppresses logfire's "not
+configured" warning (the eval bypasses the FastAPI lifespan so
+`logfire.configure()` is never called).
+
+Run output: per-case progress to stdout, plus stratified summary table, plus
+one row per case persisted to `data/results.db` (table `runs`).
+
+The paired-comparison tool (compare.py — for measuring v1-vs-v2 deltas with
+McNemar / bootstrap CI) is not yet implemented.
 
 [#13]: https://github.com/Pondsiders/Alpha/issues/13
