@@ -36,11 +36,12 @@ async def test_store_memory_writes_row_with_embedding() -> None:
     assert len(payload["created_at"]) > 0
 
     # Verify the row actually landed with content + a real embedding.
+    sql = """
+        SELECT content, embedding_qwen IS NOT NULL AS has_embedding
+          FROM cortex.memories
+         WHERE id = $1
+    """
     pool = await get_pool()
-    sql = (
-        "SELECT content, embedding_qwen IS NOT NULL AS has_embedding"
-        + " FROM cortex.memories WHERE id = $1"
-    )
     async with pool.acquire() as conn:
         row = await conn.fetchrow(sql, new_id)
     assert row is not None
