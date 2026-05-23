@@ -1,0 +1,88 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+      redis:
+        image: redis:8-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # The test stack: postgres + redis run as service containers above,
+      # reachable on 127.0.0.1 via the published ports.
+      TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+      TEST_REDIS_URL: redis://127.0.0.1:6379/0
+      # Deliberately bogus production URLs — conftest's pytest_configure
+      # rewrites these from TEST_* at session start, and refuses to run
+      # if a test ever reads either of them as-is.
+      DATABASE_URL: postgresql://invalid:invalid@invalid:5432/refuse-to-run
+      REDIS_URL: redis://invalid:6379/0
+      # Bogus LLM config — clients construct (Pydantic validates the URL
+      # syntax) but no network call is ever made: MECHANISM_CI=1 triggers
+      # the conftest blanket-mock of .create() on both clients.
+      CHAT_API_KEY: fake-chat-key
+      CHAT_BASE_URL: http://invalid.local
+      CHAT_MODEL: fake-chat-model
+      EMBEDDING_API_KEY: fake-embed-key
+      EMBEDDING_BASE_URL: http://invalid.local
+      EMBEDDING_MODEL: fake-embed-model
+      LOGFIRE_TOKEN: fake-logfire-token
+      TIMEZONE: America/Los_Angeles
+      LOGFIRE_IGNORE_NO_CONFIG: "1"
+      MECHANISM_CI: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Install Python dependencies
+        working-directory: mechanism
+        run: uv sync --all-extras
+
+      - name: Load test schema
+        run: |
+          PGPASSWORD=postgres psql -h 127.0.0.1 -p 5432 -U postgres -d postgres \
+            -f mechanism/tests/fixtures/schema.sql
+
+      - name: Run pytest
+        working-directory: mechanism
+        run: uv run pytest -v
+
+      - name: Lint
+        working-directory: mechanism
+        run: uv run ruff check
+
+      - name: Type check
+        working-directory: mechanism
+        run: uv run basedpyright

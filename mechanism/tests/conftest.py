@@ -92,6 +92,72 @@ _EMBEDDING_DIMENSIONS = 2560  # Qwen 3 Embedding 4B; see llm.format_query_for_em
 _SEED_SQL_PATH = Path(__file__).parent / "fixtures" / "seed.sql"
 
 
+def _zero_embedding_response(n_inputs: int) -> CreateEmbeddingResponse:
+    """Build a CreateEmbeddingResponse with `n_inputs` zero vectors."""
+    return CreateEmbeddingResponse(
+        object="list",
+        model="fake-embed-model",
+        usage={"prompt_tokens": 0, "total_tokens": 0},  # pyright: ignore[reportArgumentType]
+        data=[
+            Embedding(index=i, object="embedding", embedding=[0.0] * _EMBEDDING_DIMENSIONS)
+            for i in range(n_inputs)
+        ],
+    )
+
+
+def _empty_chat_response() -> ChatCompletion:
+    """Build a ChatCompletion with an empty JSON-array content."""
+    return ChatCompletion(
+        id="fake-chatcmpl",
+        object="chat.completion",
+        created=0,
+        model="fake-chat-model",
+        choices=[
+            Choice(
+                index=0,
+                finish_reason="stop",
+                message=ChatCompletionMessage(role="assistant", content="[]"),
+            )
+        ],
+    )
+
+
+@pytest.fixture(autouse=True)
+def _ci_block_llm_calls(monkeypatch: pytest.MonkeyPatch) -> None:  # pyright: ignore[reportUnusedFunction]
+    """In CI, blanket-mock the LLM clients so no test makes a real network call.
+
+    Local dev: no-op. Tests that need real Bifrost (store_memory) get it;
+    tests that need a tracking mock opt into `mock_llm`. The clients hit
+    the configured Bifrost gateway like they would in production.
+
+    CI: blanket monkeypatches that return valid empty shapes. Tests that
+    opt into `mock_llm` re-monkeypatch with tracking versions on top
+    (last setattr wins, LIFO undo on teardown). The blanket prevents
+    store_memory, anamneses, memories, etc. from reaching for a Bifrost
+    that isn't there.
+    """
+    if not os.environ.get("MECHANISM_CI"):
+        return
+
+    from mechanism import llm
+
+    chat_client = llm.get_chat_client()
+    embed_client = llm.get_embedding_client()
+
+    async def blanket_chat(**_kwargs: Any) -> ChatCompletion:
+        return _empty_chat_response()
+
+    async def blanket_embed(**kwargs: Any) -> CreateEmbeddingResponse:
+        raw_input = kwargs.get("input")
+        n_inputs = (
+            len(raw_input) if isinstance(raw_input, list) else 1  # pyright: ignore[reportUnknownArgumentType]
+        )
+        return _zero_embedding_response(n_inputs)
+
+    monkeypatch.setattr(chat_client.chat.completions, "create", blanket_chat)
+    monkeypatch.setattr(embed_client.embeddings, "create", blanket_embed)
+
+
 @pytest.fixture
 async def seeded(_clean_db_and_reset_pool: None) -> None:
     """Load `fixtures/seed.sql` on top of the post-TRUNCATE empty baseline.
