@@ -72,6 +72,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     settings = get_settings()
 
     _ = logfire.configure(
+        send_to_logfire="if-token-present",
         token=settings.logfire_token,
         service_name=settings.otel_service_name,
         scrubbing=logfire.ScrubbingOptions(callback=_scrubbing_callback),

@@ -10,9 +10,9 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
-from typing import ClassVar
+from typing import ClassVar, Self
 
-from pydantic import HttpUrl, PostgresDsn, RedisDsn
+from pydantic import HttpUrl, PostgresDsn, RedisDsn, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # The .env file (if any) lives at the repo root, two levels above this
@@ -36,10 +36,22 @@ class Settings(BaseSettings):
     embedding_api_key: str
     embedding_base_url: HttpUrl
     embedding_model: str
-    logfire_token: str
-    otel_service_name: str = "mechanism"
+    logfire_token: str | None = None
+    otel_service_name: str | None = None
     redis_url: RedisDsn
     timezone: str
+
+    @model_validator(mode="after")
+    def _logfire_requires_service_name(self) -> Self:
+        """Refuse to start if LOGFIRE_TOKEN is set without OTEL_SERVICE_NAME.
+
+        Service identity is explicit per deploy, never inferred — silently
+        reporting telemetry under a wrong default is worse than not running.
+        """
+        if self.logfire_token and not self.otel_service_name:
+            msg = "OTEL_SERVICE_NAME is required when LOGFIRE_TOKEN is set."
+            raise ValueError(msg)
+        return self
 
 
 @lru_cache
