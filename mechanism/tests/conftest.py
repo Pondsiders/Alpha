@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import AsyncGenerator
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -87,6 +88,29 @@ async def _clean_db_and_reset_pool() -> AsyncGenerator[None]:  # pyright: ignore
 
 
 _EMBEDDING_DIMENSIONS = 2560  # Qwen 3 Embedding 4B; see llm.format_query_for_embedding.
+
+_SEED_SQL_PATH = Path(__file__).parent / "fixtures" / "seed.sql"
+
+
+@pytest.fixture
+async def seeded(_clean_db_and_reset_pool: None) -> None:
+    """Load `fixtures/seed.sql` on top of the post-TRUNCATE empty baseline.
+
+    Depends on `_clean_db_and_reset_pool` (the autouse TRUNCATE) so the seed
+    lands into a clean cortex.memories / cortex.diary. Tests that need seed
+    data declare `seeded` as a parameter; tests that don't get an empty DB
+    (so e.g. the memories-hook no-op assertion stays meaningful).
+
+    Per-test reseed is intentional — seed.sql is ~200 KB of pre-computed
+    Qwen embeddings, so each test starts from an identical fixture state.
+    Regenerate via `just seed-generate`.
+    """
+    from mechanism.db import get_pool
+
+    seed_sql = _SEED_SQL_PATH.read_text(encoding="utf-8")
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        _ = await conn.execute(seed_sql)
 
 
 @pytest.fixture

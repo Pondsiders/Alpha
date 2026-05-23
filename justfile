@@ -61,3 +61,8 @@ test: test-up
 
 # Wipe and re-init the test stack, then run the suite.
 test-reset: test-init test
+
+# Materialize seed.sql by filling embeddings into seed.sql.template via Bifrost.
+# Run after editing the template, or after swapping embedding models.
+seed-generate:
+    ./mechanism/tests/fixtures/generate.py

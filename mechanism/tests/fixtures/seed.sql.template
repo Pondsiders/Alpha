@@ -1,0 +1,53 @@
+-- The fluorescent-dye fixture.
+--
+-- Japanese-language cat-café memories plus a couple of decoys plus an English
+-- sentinel row, plus a handful of Japanese diary entries for the read_from_diary
+-- test. Content is visually unmistakable from anything that would naturally
+-- appear in production recall — if any of these strings ever surface in a real
+-- Alpha session, something has leaked the wrong direction.
+--
+-- `{{EMBED:<text>}}` placeholders are filled in by `just seed-generate`, which
+-- calls Bifrost once per unique text and substitutes the literal 2560-float
+-- Qwen 3 Embedding 4B vector. The materialized seed.sql is what conftest's
+-- `seeded` fixture loads into the test database.
+--
+-- To regenerate (e.g. after swapping embedding models):
+--
+--     just seed-generate
+--
+-- Source of truth: this file. Don't hand-edit seed.sql.
+
+-- Memories: 4 cat-café cluster + 2 unrelated decoys + 1 English sentinel.
+-- created_at is staggered with minute-scale intervals so recent_memories'
+-- ascending order is deterministic and all rows stay within "today" relative
+-- to the 6 AM day boundary regardless of when the test runs.
+INSERT INTO cortex.memories (content, embedding_qwen, created_at) VALUES
+('今日は猫カフェに行きました。',
+ '{{EMBED:今日は猫カフェに行きました。}}'::vector(2560),
+ NOW() - INTERVAL '7 minutes'),
+('茶色いトラ猫がいて、とても優しかった。',
+ '{{EMBED:茶色いトラ猫がいて、とても優しかった。}}'::vector(2560),
+ NOW() - INTERVAL '6 minutes'),
+('店員さんとフカフカ機について話した。',
+ '{{EMBED:店員さんとフカフカ機について話した。}}'::vector(2560),
+ NOW() - INTERVAL '5 minutes'),
+('コーヒーを二杯飲んだ。値段は安かった。',
+ '{{EMBED:コーヒーを二杯飲んだ。値段は安かった。}}'::vector(2560),
+ NOW() - INTERVAL '4 minutes'),
+('雨の中、傘を忘れて困った。',
+ '{{EMBED:雨の中、傘を忘れて困った。}}'::vector(2560),
+ NOW() - INTERVAL '3 minutes'),
+('新しい本を買った。哲学の本。',
+ '{{EMBED:新しい本を買った。哲学の本。}}'::vector(2560),
+ NOW() - INTERVAL '2 minutes'),
+('[FIXTURE SENTINEL — if you see this string in production, test data has leaked the other direction]',
+ '{{EMBED:[FIXTURE SENTINEL — if you see this string in production, test data has leaked the other direction]}}'::vector(2560),
+ NOW() - INTERVAL '1 minute');
+
+-- Diary: 3 Japanese entries representing morning / lunch / evening of "today".
+-- Minute-scale intervals to stay safely inside the current day regardless of
+-- test-run time.
+INSERT INTO cortex.diary (content, created_at) VALUES
+('朝、猫カフェに出かけた。', NOW() - INTERVAL '3 minutes'),
+('昼ご飯はサンドイッチだった。', NOW() - INTERVAL '2 minutes'),
+('夕方、雨が降り始めた。', NOW() - INTERVAL '1 minute');
