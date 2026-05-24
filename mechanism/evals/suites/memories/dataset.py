@@ -15,13 +15,14 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 from pydantic_evals import Case, Dataset
 
 SAMPLE_FILE = Path(__file__).parent / "sample-100-labeled.json"
 
 
-def load_dataset() -> Dataset[str, list[str], dict]:
+def load_dataset() -> Dataset[str, list[str], dict[str, Any]]:
     """Load the labeled sample into a Pydantic Evals Dataset, skipping flagged rows."""
     rows = json.loads(SAMPLE_FILE.read_text())
     cases = [
@@ -51,6 +52,7 @@ if __name__ == "__main__":
     print("First three cases:")
     for c in dataset.cases[:3]:
         preview = c.inputs[:80].replace("\n", " ")
-        more = "..." if len(c.expected_output) > 2 else ""
+        expected = c.expected_output or []
+        more = "..." if len(expected) > 2 else ""
         print(f"  {c.name}  inputs={preview!r}")
-        print(f"           expected={c.expected_output[:2]}{more}")
+        print(f"           expected={expected[:2]}{more}")
