@@ -14,6 +14,8 @@ Use conventional-commit style for commit messages. Unless otherwise noted, the f
 
 This is a small monorepo. The only source tree is `mechanism/` (a Python package); everything at the repo root is infra glue: a `Dockerfile` and `compose.yml` for production, `compose-dev.yml` for the local dev stack, `compose-test.yml` for the isolated test stack, a `justfile`, a `.env` shared by dev/prod, and a GitHub Actions workflow under `.github/`.
 
+Per-deploy identity (compose project name, tailscale hostname) lives in a `compose.override.yml` next to `compose.yml` — gitignored, copied from `compose.override.yml.example` on each deploy box and edited for that deploy's name. Docker Compose auto-merges the override; the source tree stays fork-identical, so divergence lives in deploy overrides, not in code.
+
 ## Commands
 
 All `just` recipes run from the repo root; all `uv` commands run from `mechanism/`.

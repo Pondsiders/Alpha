@@ -1,16 +1,52 @@
 services:
-  alpha-server:
+  tailscale:
+    image: ghcr.io/tailscale/tailscale:latest
+    # hostname is set per-deploy in compose.override.yml — see
+    # compose.override.yml.example. Without it tailscale registers
+    # with a random container hostname on the tailnet.
+    environment:
+      TS_AUTHKEY: tskey-auth-revoked
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_AUTH_ONCE: "true"
+      TS_USERSPACE: "false"
+      TS_EXTRA_ARGS: ${TS_EXTRA_ARGS:-}
+      TS_SERVE_CONFIG: /config/serve-config.json
+    volumes:
+      - tailscale-state:/var/lib/tailscale
+      - ./tailscale:/config:ro
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "tailscale", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  mechanism:
     build:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
-    ports:
-      - "127.0.0.1:8000:8000"
+    network_mode: service:tailscale
+    depends_on:
+      tailscale:
+        condition: service_healthy
     env_file:
       - .env
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/livez').read()\""]
+      test:
+        [
+          "CMD-SHELL",
+          'python -c "import urllib.request; urllib.request.urlopen(''http://127.0.0.1:8000/mechanism/livez'').read()"',
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 30s
+
+volumes:
+  tailscale-state:

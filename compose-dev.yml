@@ -39,7 +39,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          'python -c "import urllib.request; urllib.request.urlopen(''http://127.0.0.1:8000/livez'').read()"',
+          'python -c "import urllib.request; urllib.request.urlopen(''http://127.0.0.1:8000/mechanism/livez'').read()"',
         ]
       interval: 10s
       timeout: 5s

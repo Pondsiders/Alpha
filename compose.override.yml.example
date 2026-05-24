@@ -1,0 +1,24 @@
+# Per-deploy Docker Compose override.
+#
+# Auto-loaded by `docker compose up` when present alongside compose.yml.
+# Pins the deploy's identity: project name (which prefixes container, image,
+# network, and volume names) and the tailscale sidecar's tailnet hostname.
+#
+# `compose.override.yml` is gitignored so each deploy's identity stays out
+# of the source tree. Divergence lives in .env and compose overrides,
+# never in code.
+#
+# To enable on a deploy (one-time):
+#
+#   cd /opt/<Deploy>
+#   cp compose.override.yml.example compose.override.yml
+#   # edit both `name:` and `tailscale.hostname` for this deploy
+#
+# Example values shown are for /opt/Alpha. For /opt/Rosemary, change to
+# `name: rosemary` and `hostname: rosemary-mechanism`.
+
+name: alpha
+
+services:
+  tailscale:
+    hostname: alpha-mechanism
