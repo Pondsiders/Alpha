@@ -19,8 +19,3 @@ scratch/
 
 # per-checkout Docker Compose override (see compose.override.yml.example)
 compose.override.yml
-
-# Eval data
-mechanism/evals/suites/*/sample-*.json
-mechanism/evals/suites/*/label.py
-mechanism/evals/.cache/

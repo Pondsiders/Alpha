@@ -28,20 +28,18 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, cast
+from typing import Any, ClassVar, cast
 
 import logfire
 import numpy as np
-from fastapi import Request, Response
+from fastapi import Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
 
 from mechanism import clock, llm
 from mechanism.db import get_pool
 from mechanism.hooks import router
-
-if TYPE_CHECKING:
-    import redis.asyncio as redis
+from mechanism.redis_client import get_redis_client
 
 _SYSTEM_PROMPT = (Path(__file__).parent / "anamneses_system_prompt.md").read_text(encoding="utf-8")
 
@@ -74,7 +72,7 @@ class HookEnvelope(BaseModel):
 
 
 @router.post("/anamneses")
-async def anamneses(envelope: HookEnvelope, request: Request) -> Response:
+async def anamneses(envelope: HookEnvelope) -> Response:
     """Run the explicit-reference recall pipeline; return matched memories as additionalContext.
 
     Returns a 200 with empty body when there's nothing to inject — the
@@ -82,7 +80,7 @@ async def anamneses(envelope: HookEnvelope, request: Request) -> Response:
     contain no explicit anamnesis cues and will take this path.
     """
     with logfire.span("hooks.anamneses {session_id}", session_id=envelope.session_id):
-        additional_context = await _run(envelope.prompt, envelope.session_id, request)
+        additional_context = await _run(envelope.prompt, envelope.session_id)
     if not additional_context:
         return Response(status_code=200)
     return JSONResponse(
@@ -95,11 +93,11 @@ async def anamneses(envelope: HookEnvelope, request: Request) -> Response:
     )
 
 
-async def _run(prompt: str, session_id: str, request: Request) -> str:
+async def _run(prompt: str, session_id: str) -> str:
     """Run the explicit-reference recall pipeline. Returns the additionalContext string."""
     chat_client = llm.get_chat_client()
     embedding_client = llm.get_embedding_client()
-    redis_client: redis.Redis = request.app.state.redis
+    redis_client = get_redis_client()
 
     # 1. Ask the chat model to extract anamnesis queries (returns [] for most prompts).
     with logfire.span("anamneses.extract_queries"):

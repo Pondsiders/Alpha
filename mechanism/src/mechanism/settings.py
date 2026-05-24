@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     embedding_base_url: HttpUrl
     embedding_model: str
     logfire_token: str | None = None
+    mechanism_token: str | None = None
     otel_service_name: str | None = None
     redis_url: RedisDsn
     timezone: str

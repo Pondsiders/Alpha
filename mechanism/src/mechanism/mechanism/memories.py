@@ -1,6 +1,8 @@
-"""The `/hooks/memories` endpoint — semantic recall on UserPromptSubmit.
+"""The `memories` tool — semantic recall on UserPromptSubmit.
 
-The pipeline:
+Port of the `/hooks/memories` HTTP handler to an MCP tool on the
+mechanism server. Same pipeline:
+
     prompt -> chat model extracts queries (JSON-array constrained)
            -> embed each query (fan out)
            -> pgvector cosine search per query (fan out, top-1)
@@ -8,6 +10,11 @@ The pipeline:
            -> mark new ones seen
            -> format as `## Memory #...` blocks
            -> return as additionalContext
+
+Returns the Claude Code hook output schema as a plain dict (same shape
+as the timestamp tool). Returns `None` when there's nothing to inject —
+FastMCP renders that as an empty response, which Claude Code's hook
+layer treats as a no-op.
 """
 
 from __future__ import annotations
@@ -15,17 +22,15 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
-from typing import Any, ClassVar, cast
+from typing import Any, cast
 
 import logfire
 import numpy as np
-from fastapi import Response
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict
+from mcp.types import ToolAnnotations
 
 from mechanism import clock, llm
 from mechanism.db import get_pool
-from mechanism.hooks import router
+from mechanism.mechanism.server import mcp
 from mechanism.redis_client import get_redis_client
 
 _SYSTEM_PROMPT = (Path(__file__).parent / "memories_system_prompt.md").read_text(encoding="utf-8")
@@ -49,36 +54,32 @@ SELECT id,
 """
 
 
-class HookEnvelope(BaseModel):
-    """Subset of the Claude Code hook JSON envelope we care about."""
-
-    session_id: str
-    prompt: str
-
-    model_config: ClassVar[ConfigDict] = ConfigDict(extra="ignore")
-
-
-@router.post("/memories")
-async def memories(envelope: HookEnvelope) -> Response:
-    """Run the recall pipeline; return matched memories as additionalContext.
-
-    Returns a 200 with empty body when there's nothing to inject — the
-    documented no-op shape (per Claude Code hooks reference). Returning
-    `additionalContext: ""` is not documented as silent; the empty-body
-    path is.
-    """
-    with logfire.span("hooks.memories {session_id}", session_id=envelope.session_id):
-        additional_context = await _run(envelope.prompt, envelope.session_id)
+@mcp.tool(
+    description=(
+        "Run semantic recall against cortex.memories for a UserPromptSubmit "
+        "hook. Returns matched memories as additionalContext, or no-op when "
+        "nothing relevant is found."
+    ),
+    annotations=ToolAnnotations(
+        title="Memories",
+        readOnlyHint=False,  # writes the seen-set to Redis
+        destructiveHint=False,
+        idempotentHint=False,
+        openWorldHint=False,
+    ),
+)
+async def memories(prompt: str, session_id: str) -> dict[str, dict[str, str]] | None:
+    """Run the recall pipeline; return matched memories as additionalContext."""
+    with logfire.span("memories {session_id}", session_id=session_id):
+        additional_context = await _run(prompt, session_id)
     if not additional_context:
-        return Response(status_code=200)
-    return JSONResponse(
-        content={
-            "hookSpecificOutput": {
-                "hookEventName": "UserPromptSubmit",
-                "additionalContext": additional_context,
-            }
+        return None
+    return {
+        "hookSpecificOutput": {
+            "hookEventName": "UserPromptSubmit",
+            "additionalContext": additional_context,
         }
-    )
+    }
 
 
 async def _run(prompt: str, session_id: str) -> str:

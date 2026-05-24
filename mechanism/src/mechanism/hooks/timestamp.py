@@ -11,17 +11,14 @@ omitted entirely.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING, ClassVar
+from typing import ClassVar
 
 import logfire
-from fastapi import Request
 from pydantic import BaseModel, ConfigDict, Field
 
 from mechanism import clock
 from mechanism.hooks import router
-
-if TYPE_CHECKING:
-    import redis.asyncio as redis
+from mechanism.redis_client import get_redis_client
 
 _LAST_MSG_TTL_SECONDS = 7 * 24 * 60 * 60  # one week
 
@@ -41,10 +38,10 @@ class HookResponse(BaseModel):
 
 
 @router.post("/timestamp")
-async def timestamp(envelope: HookEnvelope, request: Request) -> HookResponse:
+async def timestamp(envelope: HookEnvelope) -> HookResponse:
     """Return a one-line timestamp note as additionalContext."""
     with logfire.span("hooks.timestamp {session_id}", session_id=envelope.session_id):
-        redis_client: redis.Redis = request.app.state.redis
+        redis_client = get_redis_client()
         now = clock.now()
         now_pso = clock.pso8601(now)
 

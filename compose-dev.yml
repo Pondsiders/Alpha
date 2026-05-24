@@ -30,11 +30,11 @@ services:
       - 0.0.0.0
       - --port
       - "8000"
-      - --reload
-      - --reload-dir
-      - /app/mechanism/src
-      - --reload-include
-      - "*.md"
+      # - --reload
+      # - --reload-dir
+      # - /app/mechanism/src
+      # - --reload-include
+      # - "*.md"
     healthcheck:
       test:
         [

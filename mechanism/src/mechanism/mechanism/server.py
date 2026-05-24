@@ -1,4 +1,4 @@
-"""The FastMCP server instance for utils.
+"""The FastMCP server instance for the `mechanism` hook-tool surface.
 
 Tool modules import `mcp` from here and register themselves via the
 `@mcp.tool` decorator. The package `__init__` imports the tool modules
@@ -9,17 +9,13 @@ up the full tool surface.
 from __future__ import annotations
 
 from importlib.metadata import version
-from pathlib import Path
 
 from fastmcp import FastMCP
 
 from mechanism.auth import get_auth_verifier
 
-_INSTRUCTIONS = (Path(__file__).parent / "instructions.md").read_text(encoding="utf-8")
-
 mcp: FastMCP = FastMCP(
-    "utils",
-    instructions=_INSTRUCTIONS,
+    "mechanism",
     version=version("mechanism"),
     auth=get_auth_verifier(),
 )

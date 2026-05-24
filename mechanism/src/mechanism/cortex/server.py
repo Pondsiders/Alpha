@@ -13,10 +13,13 @@ from pathlib import Path
 
 from fastmcp import FastMCP
 
+from mechanism.auth import get_auth_verifier
+
 _INSTRUCTIONS = (Path(__file__).parent / "instructions.md").read_text(encoding="utf-8")
 
 mcp: FastMCP = FastMCP(
     "cortex",
     instructions=_INSTRUCTIONS,
     version=version("mechanism"),
+    auth=get_auth_verifier(),
 )

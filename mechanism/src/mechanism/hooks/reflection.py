@@ -18,17 +18,13 @@ let it end normally so Jeffery can speak next."
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar, cast
+from typing import Any, ClassVar, cast
 
 import logfire
-from fastapi import Request
 from pydantic import BaseModel, ConfigDict
 
 from mechanism.hooks import router
-
-if TYPE_CHECKING:
-    import redis.asyncio as redis
-
+from mechanism.redis_client import get_redis_client
 
 _SEEN_TTL_SECONDS = 7 * 24 * 60 * 60  # one week
 
@@ -64,7 +60,7 @@ class HookEnvelope(BaseModel):
 
 
 @router.post("/reflection")
-async def reflection(envelope: HookEnvelope, request: Request) -> dict[str, Any]:
+async def reflection(envelope: HookEnvelope) -> dict[str, Any]:
     """Increment this session's turn counter; block-with-reason if the gate fires.
 
     Returns an empty object on no-fire (lets the turn end). Returns
@@ -77,7 +73,7 @@ async def reflection(envelope: HookEnvelope, request: Request) -> dict[str, Any]
         if envelope.stop_hook_active:
             return {}
 
-        redis_client: redis.Redis = request.app.state.redis
+        redis_client = get_redis_client()
         key = f"reflection:turn:{envelope.session_id}"
 
         # INCR on a missing key starts at 1. Atomic.
