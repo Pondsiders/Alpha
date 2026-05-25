@@ -20,9 +20,10 @@ scratch/
 # per-checkout Docker Compose override (see compose.override.yml.example)
 compose.override.yml
 
-# evals
+# evals — ignore data + local-curation script; .py harness files are tracked
 mechanism/evals/.cache/
-mechanism/evals/suites/memories/
+mechanism/evals/suites/memories/label.py
+mechanism/evals/suites/memories/sample-*.json
 
 # dev database dump
 alpha.dump
