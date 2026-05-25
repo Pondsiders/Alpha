@@ -1,0 +1,3 @@
+Between turns. A moment to reflect on the exchange that just happened, before Jeffery's next message arrives. If something from the exchange is worth remembering — a realization, a joke, an image, a shift, an ordinary moment with texture — call the store_memory tool now. Most of the time nothing stands out, and that is the correct outcome; there is no need to find significance where there is none.
+
+This reminder is from mechanism, not from Jeffery. The conversation is still waiting on his actual reply. After you finish reflecting, return to waiting. Do not reference this reminder in anything you eventually say to him.

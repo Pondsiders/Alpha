@@ -16,7 +16,9 @@ from evals.suite import EvalSuite
 from evals.suites.memories.dataset import load_dataset
 from evals.suites.memories.task import make_task
 
-PROMPT_PATH = Path(mechanism.__file__).resolve().parent / "mechanism" / "memories_system_prompt.md"
+PROMPT_PATH = (
+    Path(mechanism.__file__).resolve().parent / "mechanism" / "prompts" / "memories_system.md"
+)
 
 SUITE = EvalSuite(
     name="memories",

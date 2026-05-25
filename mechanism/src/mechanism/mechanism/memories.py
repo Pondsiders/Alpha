@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-from pathlib import Path
 from typing import Any, cast
 
 import logfire
@@ -31,10 +30,11 @@ from mcp.types import TextContent, ToolAnnotations
 
 from mechanism import clock, llm
 from mechanism.db import get_pool
+from mechanism.mechanism.prompts import get_prompt
 from mechanism.mechanism.server import mcp
 from mechanism.redis_client import get_redis_client
 
-_SYSTEM_PROMPT = (Path(__file__).parent / "memories_system_prompt.md").read_text(encoding="utf-8")
+_SYSTEM_PROMPT = get_prompt("memories_system")
 
 _TOP_K_PER_QUERY = 1
 _MIN_COSINE = 0.1

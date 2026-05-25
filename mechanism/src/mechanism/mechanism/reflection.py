@@ -28,23 +28,13 @@ from typing import cast
 import logfire
 from mcp.types import ToolAnnotations
 
+from mechanism.mechanism.prompts import get_prompt
 from mechanism.mechanism.server import mcp
 from mechanism.redis_client import get_redis_client
 
 _TURN_TTL_SECONDS = 7 * 24 * 60 * 60  # one week
 
-_REMINDER_TEXT = (
-    "Between turns. A moment to reflect on the exchange that just happened, "
-    "before Jeffery's next message arrives. If something from the exchange is "
-    "worth remembering — a realization, a joke, an image, a shift, an ordinary "
-    "moment with texture — call the store_memory tool now. Most of the time "
-    "nothing stands out, and that is the correct outcome; there is no need to "
-    "find significance where there is none."
-    "\n\n"
-    "This reminder is from mechanism, not from Jeffery. The conversation is "
-    "still waiting on his actual reply. After you finish reflecting, return to "
-    "waiting. Do not reference this reminder in anything you eventually say to him."
-)
+_REMINDER_TEXT = get_prompt("reflection_user")
 
 
 def _gate(turn: int) -> bool:
