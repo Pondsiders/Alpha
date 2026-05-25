@@ -28,8 +28,8 @@ from typing import cast
 import logfire
 from mcp.types import ToolAnnotations
 
-from mechanism.mechanism.prompts import get_prompt
 from mechanism.mechanism.server import mcp
+from mechanism.prompts import get_prompt
 from mechanism.redis_client import get_redis_client
 
 _TURN_TTL_SECONDS = 7 * 24 * 60 * 60  # one week

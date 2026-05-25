@@ -28,8 +28,8 @@ from mcp.types import TextContent, ToolAnnotations
 
 from mechanism import clock, llm
 from mechanism.db import get_pool
-from mechanism.mechanism.prompts import get_prompt
 from mechanism.mechanism.server import mcp
+from mechanism.prompts import get_prompt
 from mechanism.redis_client import get_redis_client
 
 _SYSTEM_PROMPT = get_prompt("anamneses_system")
