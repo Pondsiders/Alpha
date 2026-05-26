@@ -10,7 +10,7 @@ Cortex co-exists with the auto-memory system. **Auto-memory is for facts. Cortex
 - `store_memory` — save a moment.
 - `search_memories` — semantic recall.
 - `recent_memories` — yesterday and today.
-- `retrieve_memory` — fetch one by id.
+- `get_memory` — fetch one by id.
 
 ## Diary tools
 
