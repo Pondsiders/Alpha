@@ -34,7 +34,6 @@ key expires on the same seam — dead sessions don't accumulate."""
         idempotentHint=False,
         openWorldHint=False,
     ),
-    meta={"anthropic/alwaysLoad": True},
 )
 async def timestamp(session_id: str) -> dict[str, dict[str, str]]:
     """Return a UserPromptSubmit hook response with sent-on (+elapsed) lines."""

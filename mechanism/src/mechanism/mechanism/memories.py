@@ -61,7 +61,6 @@ SELECT id,
         idempotentHint=False,
         openWorldHint=False,
     ),
-    meta={"anthropic/alwaysLoad": True},
 )
 async def memories(prompt: str, session_id: str) -> ToolResult | None:
     """Run the recall pipeline; return matched memories as additionalContext."""

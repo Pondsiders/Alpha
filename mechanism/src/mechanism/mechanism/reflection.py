@@ -44,7 +44,6 @@ def _gate(turn: int) -> bool:
         idempotentHint=False,
         openWorldHint=False,
     ),
-    meta={"anthropic/alwaysLoad": True},
 )
 async def reflection(
     session_id: str,
