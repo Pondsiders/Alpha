@@ -20,6 +20,7 @@ hostnames that A-record to private IPs, etc.).
 
 from __future__ import annotations
 
+import asyncio
 import ipaddress
 import socket
 from urllib.parse import urlparse
@@ -29,8 +30,11 @@ class SSRFError(Exception):
     """Raised when a URL is rejected by SSRF validation."""
 
 
-def assert_public_url(url: str) -> None:
+async def assert_public_url(url: str) -> None:
     """Reject URLs that resolve to a non-public address.
+
+    DNS resolution runs in a worker thread so a slow resolver doesn't
+    stall the event loop while other tool calls are in flight.
 
     Args:
         url: The URL to validate.
@@ -52,7 +56,7 @@ def assert_public_url(url: str) -> None:
         raise SSRFError(msg)
 
     try:
-        infos = socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)
+        infos = await asyncio.to_thread(socket.getaddrinfo, host, None, type=socket.SOCK_STREAM)
     except socket.gaierror as e:
         msg = f"DNS resolution failed for {host!r}: {e}"
         raise SSRFError(msg) from e

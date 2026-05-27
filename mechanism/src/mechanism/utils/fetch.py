@@ -150,7 +150,7 @@ async def fetch(
             unreachable, or no tier can produce usable content.
     """
     try:
-        assert_public_url(url)
+        await assert_public_url(url)
     except SSRFError as e:
         raise ToolError(str(e)) from e
 
