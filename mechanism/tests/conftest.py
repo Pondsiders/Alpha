@@ -13,11 +13,13 @@ from httpx import ASGITransport, AsyncClient
 from openai.types import CreateEmbeddingResponse, Embedding
 from openai.types.chat import ChatCompletion, ChatCompletionMessage
 from openai.types.chat.chat_completion import Choice
+from pydantic import ValidationError
 from testcontainers.postgres import PostgresContainer  # pyright: ignore[reportMissingTypeStubs]
 from testcontainers.redis import RedisContainer  # pyright: ignore[reportMissingTypeStubs]
 
 from mechanism import db
 from mechanism.redis_client import close_redis_client
+from mechanism.settings import Settings
 
 _SCHEMA_SQL_PATH = Path(__file__).parent / "fixtures" / "schema.sql"
 _SEED_SQL_PATH = Path(__file__).parent / "fixtures" / "seed.sql"
@@ -36,44 +38,45 @@ def pytest_configure(config: pytest.Config) -> None:  # pyright: ignore[reportUn
     can run without colliding. The containers are torn down in
     pytest_unconfigure at session end.
 
-    Also stubs any Settings-required env vars not already present, so the
-    test suite runs in a fresh checkout / worktree without a `.env` file.
-    Bifrost credentials only need to exist to pass Settings validation —
-    the `mock_llm` fixture (and the CI blanket-mock) replace `.create()`
-    on the OpenAI clients, so no test ever hits the wire. `setdefault`
-    preserves any value already in the environment (e.g. `MECHANISM_TOKEN`
-    set by the `just test` recipe, or real values exported by a developer).
+    Also stubs Settings-required env vars when they're absent, so the test
+    suite runs in a fresh checkout / worktree without a `.env` file.
+    Detection is delegated to Settings itself: if `Settings()` raises
+    `ValidationError`, required fields are missing — stub them all via
+    `setdefault` (preserving any value the shell or the `just test` recipe
+    already provided) and flip `_stubbed_llm_creds` so `_ci_block_llm_calls`
+    blanket-mocks the OpenAI clients. `DATABASE_URL` and `REDIS_URL` get
+    placeholder stubs unconditionally — Settings just needs them to be
+    present-and-parseable here, and the testcontainer block below
+    overwrites them with the real ephemeral URLs a few lines later.
 
     Runs before any test collection, so the env vars are set before any
     mechanism module is imported and before settings.get_settings() is cached.
     """
     global _postgres_container, _redis_container, _stubbed_llm_creds
 
-    _ = os.environ.setdefault("MECHANISM_TOKEN", "test-token-not-a-real-secret")
-    _ = os.environ.setdefault("TIMEZONE", "America/Los_Angeles")
+    # Placeholders for fields the testcontainer block overwrites later.
+    # Settings just needs valid URLs to construct.
+    _ = os.environ.setdefault(
+        "DATABASE_URL", "postgresql://placeholder:placeholder@localhost/placeholder"
+    )
+    _ = os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 
-    # If neither a repo-root `.env` nor real Bifrost credentials are exported
-    # in the environment, stub the LLM vars and flip the marker so
-    # `_ci_block_llm_calls` blanket-mocks the wire. This is what makes a
-    # fresh checkout / worktree without `.env` work end-to-end: tests like
-    # `test_store_memory` (which normally hits real Bifrost in local dev)
-    # transparently fall back to the mocked clients.
-    #
-    # We detect "real creds available" by either `.env` existing at the repo
-    # root (Pydantic Settings will load it) or `CHAT_API_KEY` being already
-    # exported (developer running with shell-level env, no `.env`). The
-    # repo-root resolution mirrors `mechanism.settings._REPO_ROOT`.
-    _repo_root = Path(__file__).resolve().parents[2]
-    _dotenv_present = (_repo_root / ".env").is_file()
-    _bifrost_in_env = "CHAT_API_KEY" in os.environ
-    if not _dotenv_present and not _bifrost_in_env:
+    # Ask Settings whether real config is reachable. If validation fails,
+    # required fields are missing — stub every required field via setdefault
+    # (no-op when the value is already set) and flip the marker so the LLM
+    # clients get blanket-mocked downstream.
+    try:
+        _ = Settings()  # pyright: ignore[reportCallIssue]
+    except ValidationError:
         _stubbed_llm_creds = True
-        os.environ["CHAT_API_KEY"] = "test-not-used"
-        os.environ["CHAT_BASE_URL"] = "https://test.invalid/v1"
-        os.environ["CHAT_MODEL"] = "test-chat-model"
-        os.environ["EMBEDDING_API_KEY"] = "test-not-used"
-        os.environ["EMBEDDING_BASE_URL"] = "https://test.invalid/v1"
-        os.environ["EMBEDDING_MODEL"] = "test-embedding-model"
+        _ = os.environ.setdefault("MECHANISM_TOKEN", "test-token-not-a-real-secret")
+        _ = os.environ.setdefault("TIMEZONE", "America/Los_Angeles")
+        _ = os.environ.setdefault("CHAT_API_KEY", "test-not-used")
+        _ = os.environ.setdefault("CHAT_BASE_URL", "https://test.invalid/v1")
+        _ = os.environ.setdefault("CHAT_MODEL", "test-chat-model")
+        _ = os.environ.setdefault("EMBEDDING_API_KEY", "test-not-used")
+        _ = os.environ.setdefault("EMBEDDING_BASE_URL", "https://test.invalid/v1")
+        _ = os.environ.setdefault("EMBEDDING_MODEL", "test-embedding-model")
 
     _postgres_container = PostgresContainer(
         "pgvector/pgvector:pg17",
