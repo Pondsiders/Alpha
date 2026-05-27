@@ -13,11 +13,13 @@ from httpx import ASGITransport, AsyncClient
 from openai.types import CreateEmbeddingResponse, Embedding
 from openai.types.chat import ChatCompletion, ChatCompletionMessage
 from openai.types.chat.chat_completion import Choice
+from pydantic import ValidationError
 from testcontainers.postgres import PostgresContainer  # pyright: ignore[reportMissingTypeStubs]
 from testcontainers.redis import RedisContainer  # pyright: ignore[reportMissingTypeStubs]
 
 from mechanism import db
 from mechanism.redis_client import close_redis_client
+from mechanism.settings import Settings
 
 _SCHEMA_SQL_PATH = Path(__file__).parent / "fixtures" / "schema.sql"
 _SEED_SQL_PATH = Path(__file__).parent / "fixtures" / "seed.sql"
@@ -25,6 +27,7 @@ _EMBEDDING_DIMENSIONS = 2560  # Qwen 3 Embedding 4B; see llm.format_query_for_em
 
 _postgres_container: PostgresContainer | None = None
 _redis_container: RedisContainer | None = None
+_stubbed_llm_creds: bool = False
 
 
 def pytest_configure(config: pytest.Config) -> None:  # pyright: ignore[reportUnusedParameter]
@@ -35,10 +38,45 @@ def pytest_configure(config: pytest.Config) -> None:  # pyright: ignore[reportUn
     can run without colliding. The containers are torn down in
     pytest_unconfigure at session end.
 
+    Also stubs Settings-required env vars when they're absent, so the test
+    suite runs in a fresh checkout / worktree without a `.env` file.
+    Detection is delegated to Settings itself: if `Settings()` raises
+    `ValidationError`, required fields are missing — stub them all via
+    `setdefault` (preserving any value the shell or the `just test` recipe
+    already provided) and flip `_stubbed_llm_creds` so `_ci_block_llm_calls`
+    blanket-mocks the OpenAI clients. `DATABASE_URL` and `REDIS_URL` get
+    placeholder stubs unconditionally — Settings just needs them to be
+    present-and-parseable here, and the testcontainer block below
+    overwrites them with the real ephemeral URLs a few lines later.
+
     Runs before any test collection, so the env vars are set before any
     mechanism module is imported and before settings.get_settings() is cached.
     """
-    global _postgres_container, _redis_container
+    global _postgres_container, _redis_container, _stubbed_llm_creds
+
+    # Placeholders for fields the testcontainer block overwrites later.
+    # Settings just needs valid URLs to construct.
+    _ = os.environ.setdefault(
+        "DATABASE_URL", "postgresql://placeholder:placeholder@localhost/placeholder"
+    )
+    _ = os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
+
+    # Ask Settings whether real config is reachable. If validation fails,
+    # required fields are missing — stub every required field via setdefault
+    # (no-op when the value is already set) and flip the marker so the LLM
+    # clients get blanket-mocked downstream.
+    try:
+        _ = Settings()  # pyright: ignore[reportCallIssue]
+    except ValidationError:
+        _stubbed_llm_creds = True
+        _ = os.environ.setdefault("MECHANISM_TOKEN", "test-token-not-a-real-secret")
+        _ = os.environ.setdefault("TIMEZONE", "America/Los_Angeles")
+        _ = os.environ.setdefault("CHAT_API_KEY", "test-not-used")
+        _ = os.environ.setdefault("CHAT_BASE_URL", "https://test.invalid/v1")
+        _ = os.environ.setdefault("CHAT_MODEL", "test-chat-model")
+        _ = os.environ.setdefault("EMBEDDING_API_KEY", "test-not-used")
+        _ = os.environ.setdefault("EMBEDDING_BASE_URL", "https://test.invalid/v1")
+        _ = os.environ.setdefault("EMBEDDING_MODEL", "test-embedding-model")
 
     _postgres_container = PostgresContainer(
         "pgvector/pgvector:pg17",
@@ -169,19 +207,21 @@ def _empty_chat_response() -> ChatCompletion:
 
 @pytest.fixture(autouse=True)
 def _ci_block_llm_calls(monkeypatch: pytest.MonkeyPatch) -> None:  # pyright: ignore[reportUnusedFunction]
-    """In CI, blanket-mock the LLM clients so no test makes a real network call.
+    """Blanket-mock the LLM clients whenever real Bifrost credentials are absent.
 
-    Local dev: no-op. Tests that need real Bifrost (store_memory) get it;
-    tests that need a tracking mock opt into `mock_llm`. The clients hit
-    the configured Bifrost gateway like they would in production.
+    Local dev with a populated `.env` (or shell-exported Bifrost creds):
+    no-op. Tests that need real Bifrost (store_memory) get it; tests that
+    need a tracking mock opt into `mock_llm`. The clients hit the
+    configured Bifrost gateway like they would in production.
 
-    CI: blanket monkeypatches that return valid empty shapes. Tests that
-    opt into `mock_llm` re-monkeypatch with tracking versions on top
-    (last setattr wins, LIFO undo on teardown). The blanket prevents
-    store_memory, anamneses, memories, etc. from reaching for a Bifrost
-    that isn't there.
+    CI or fresh checkout (no `.env`, no exported creds — see
+    `pytest_configure`'s `_stubbed_llm_creds` path): blanket monkeypatches
+    that return valid empty shapes. Tests that opt into `mock_llm`
+    re-monkeypatch with tracking versions on top (last setattr wins, LIFO
+    undo on teardown). The blanket prevents store_memory, anamneses,
+    memories, etc. from reaching for a Bifrost that isn't there.
     """
-    if not os.environ.get("MECHANISM_CI"):
+    if not os.environ.get("MECHANISM_CI") and not _stubbed_llm_creds:
         return
 
     from mechanism import llm
