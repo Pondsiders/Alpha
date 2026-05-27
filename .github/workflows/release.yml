@@ -6,12 +6,16 @@
 # version bump + changelog + tag + release → Docker workflow fires → image
 # at ghcr.io/<owner>/<repo>:<version>.
 #
-# Fixotron's installation token is used (not the default GITHUB_TOKEN) so:
+# Mr. Frogbot's installation token is used (not the default GITHUB_TOKEN) so:
 #   1. PSR can push the release commit + tag through main's branch protection
-#      (Fixotron is in the bypass list).
+#      (Mr. Frogbot is in the bypass list).
 #   2. The tag push it produces triggers downstream workflows. (Pushes made
 #      with the built-in GITHUB_TOKEN don't trigger other workflows; pushes
 #      from an external identity like a GitHub App's installation token do.)
+#
+# Secret names are still `FIXOTRON_*` for historical reasons (the App was
+# originally named Fixotron, renamed 2026-05-27). The values are the App ID
+# and private key, which survived the rename — so the secrets still work.
 
 name: Release
 
@@ -26,17 +30,18 @@ permissions:
 jobs:
   release:
     # No-op when the push came from PSR's own release commit (pushed via
-    # Fixotron's installation token). Prevents recursive triggering without
-    # using `[skip ci]` in the commit message — which would also suppress
-    # the tag-push event and prevent docker-publish.yml from firing.
-    if: ${{ github.actor != 'fixotron[bot]' }}
+    # Mr. Frogbot's installation token). Prevents recursive triggering
+    # without using the skip-ci marker in the commit message — which would
+    # also suppress the tag-push event and prevent docker-publish.yml from
+    # firing.
+    if: ${{ github.actor != 'mrfrogbot[bot]' }}
     runs-on: ubuntu-latest
     concurrency:
       group: release-${{ github.ref_name }}
       cancel-in-progress: false     # never cancel a release mid-run
 
     steps:
-      - name: Mint Fixotron installation token
+      - name: Mint Mr. Frogbot installation token
         id: app-token
         uses: actions/create-github-app-token@v1
         with:
@@ -61,5 +66,5 @@ jobs:
         with:
           github_token: ${{ steps.app-token.outputs.token }}
           directory: mechanism      # pyproject.toml lives under mechanism/
-          git_committer_name: Fixotron
-          git_committer_email: 288168714+fixotron[bot]@users.noreply.github.com
+          git_committer_name: Mr. Frogbot
+          git_committer_email: 288168714+mrfrogbot[bot]@users.noreply.github.com
