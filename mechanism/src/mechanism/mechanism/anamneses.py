@@ -69,6 +69,8 @@ SELECT id,
 async def anamneses(prompt: str, session_id: str) -> ToolResult | None:
     """Run the explicit-reference recall pipeline; return matched memories as additionalContext."""
     with logfire.span("anamneses {session_id}", session_id=session_id):
+        if prompt.startswith("/"):
+            return None
         additional_context = await _run(prompt, session_id)
     if not additional_context:
         return None

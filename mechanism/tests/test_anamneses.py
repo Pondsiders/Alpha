@@ -89,3 +89,21 @@ async def test_anamneses_no_match_returns_empty_mcp_response(
     assert result.is_error is False
     assert result.content == []
     assert result.structured_content is None
+
+
+async def test_anamneses_slash_command_short_circuits(
+    seeded: None,  # pyright: ignore[reportUnusedParameter]
+    mock_llm: dict[str, list[dict[str, Any]]],
+) -> None:
+    """anamneses() no-ops without touching the LLM when the prompt starts with '/'."""
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "anamneses",
+            {"prompt": "/compact please", "session_id": str(uuid.uuid4())},
+        )
+
+    assert result.is_error is False
+    assert result.content == []
+    assert result.structured_content is None
+    assert mock_llm["chat_calls"] == []
+    assert mock_llm["embed_calls"] == []
