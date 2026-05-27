@@ -1,4 +1,4 @@
-"""Pydantic Evals Dataset for the /hooks/memories prompt eval.
+"""Pydantic Evals Dataset for the memories tool prompt eval.
 
 Loads sample-100-labeled.json (hand-labeled by Alpha, May 23 2026) into a
 Pydantic Evals Dataset. Skips rows flagged as contamination (e.g. Solitude

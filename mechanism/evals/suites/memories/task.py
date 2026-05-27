@@ -1,10 +1,10 @@
-"""Task function for the /hooks/memories prompt eval.
+"""Task function for the memories tool prompt eval.
 
 `make_task(system_prompt)` returns an async callable suitable for
 `dataset.evaluate_sync(task)`. The callable mirrors the production chat
-call in `mechanism.hooks.memories._run` step 1 — same model, same
+call in `mechanism.mechanism.memories._run` step 1 — same model, same
 sampling parameters, same JSON-schema response constraint, same parsing
-logic. *If you change the production hook's chat parameters, change
+logic. *If you change the production tool's chat parameters, change
 them here too.*
 
 The system prompt is injected at task-construction time rather than
