@@ -25,6 +25,7 @@ _EMBEDDING_DIMENSIONS = 2560  # Qwen 3 Embedding 4B; see llm.format_query_for_em
 
 _postgres_container: PostgresContainer | None = None
 _redis_container: RedisContainer | None = None
+_stubbed_llm_creds: bool = False
 
 
 def pytest_configure(config: pytest.Config) -> None:  # pyright: ignore[reportUnusedParameter]
@@ -35,10 +36,44 @@ def pytest_configure(config: pytest.Config) -> None:  # pyright: ignore[reportUn
     can run without colliding. The containers are torn down in
     pytest_unconfigure at session end.
 
+    Also stubs any Settings-required env vars not already present, so the
+    test suite runs in a fresh checkout / worktree without a `.env` file.
+    Bifrost credentials only need to exist to pass Settings validation —
+    the `mock_llm` fixture (and the CI blanket-mock) replace `.create()`
+    on the OpenAI clients, so no test ever hits the wire. `setdefault`
+    preserves any value already in the environment (e.g. `MECHANISM_TOKEN`
+    set by the `just test` recipe, or real values exported by a developer).
+
     Runs before any test collection, so the env vars are set before any
     mechanism module is imported and before settings.get_settings() is cached.
     """
-    global _postgres_container, _redis_container
+    global _postgres_container, _redis_container, _stubbed_llm_creds
+
+    _ = os.environ.setdefault("MECHANISM_TOKEN", "test-token-not-a-real-secret")
+    _ = os.environ.setdefault("TIMEZONE", "America/Los_Angeles")
+
+    # If neither a repo-root `.env` nor real Bifrost credentials are exported
+    # in the environment, stub the LLM vars and flip the marker so
+    # `_ci_block_llm_calls` blanket-mocks the wire. This is what makes a
+    # fresh checkout / worktree without `.env` work end-to-end: tests like
+    # `test_store_memory` (which normally hits real Bifrost in local dev)
+    # transparently fall back to the mocked clients.
+    #
+    # We detect "real creds available" by either `.env` existing at the repo
+    # root (Pydantic Settings will load it) or `CHAT_API_KEY` being already
+    # exported (developer running with shell-level env, no `.env`). The
+    # repo-root resolution mirrors `mechanism.settings._REPO_ROOT`.
+    _repo_root = Path(__file__).resolve().parents[2]
+    _dotenv_present = (_repo_root / ".env").is_file()
+    _bifrost_in_env = "CHAT_API_KEY" in os.environ
+    if not _dotenv_present and not _bifrost_in_env:
+        _stubbed_llm_creds = True
+        os.environ["CHAT_API_KEY"] = "test-not-used"
+        os.environ["CHAT_BASE_URL"] = "https://test.invalid/v1"
+        os.environ["CHAT_MODEL"] = "test-chat-model"
+        os.environ["EMBEDDING_API_KEY"] = "test-not-used"
+        os.environ["EMBEDDING_BASE_URL"] = "https://test.invalid/v1"
+        os.environ["EMBEDDING_MODEL"] = "test-embedding-model"
 
     _postgres_container = PostgresContainer(
         "pgvector/pgvector:pg17",
@@ -169,19 +204,21 @@ def _empty_chat_response() -> ChatCompletion:
 
 @pytest.fixture(autouse=True)
 def _ci_block_llm_calls(monkeypatch: pytest.MonkeyPatch) -> None:  # pyright: ignore[reportUnusedFunction]
-    """In CI, blanket-mock the LLM clients so no test makes a real network call.
+    """Blanket-mock the LLM clients whenever real Bifrost credentials are absent.
 
-    Local dev: no-op. Tests that need real Bifrost (store_memory) get it;
-    tests that need a tracking mock opt into `mock_llm`. The clients hit
-    the configured Bifrost gateway like they would in production.
+    Local dev with a populated `.env` (or shell-exported Bifrost creds):
+    no-op. Tests that need real Bifrost (store_memory) get it; tests that
+    need a tracking mock opt into `mock_llm`. The clients hit the
+    configured Bifrost gateway like they would in production.
 
-    CI: blanket monkeypatches that return valid empty shapes. Tests that
-    opt into `mock_llm` re-monkeypatch with tracking versions on top
-    (last setattr wins, LIFO undo on teardown). The blanket prevents
-    store_memory, anamneses, memories, etc. from reaching for a Bifrost
-    that isn't there.
+    CI or fresh checkout (no `.env`, no exported creds — see
+    `pytest_configure`'s `_stubbed_llm_creds` path): blanket monkeypatches
+    that return valid empty shapes. Tests that opt into `mock_llm`
+    re-monkeypatch with tracking versions on top (last setattr wins, LIFO
+    undo on teardown). The blanket prevents store_memory, anamneses,
+    memories, etc. from reaching for a Bifrost that isn't there.
     """
-    if not os.environ.get("MECHANISM_CI"):
+    if not os.environ.get("MECHANISM_CI") and not _stubbed_llm_creds:
         return
 
     from mechanism import llm
