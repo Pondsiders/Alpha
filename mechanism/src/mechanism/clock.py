@@ -68,6 +68,29 @@ def parse_when(value: str) -> datetime | None:
     )
 
 
+def from_iso(value: str) -> pendulum.DateTime:
+    """Parse a strict ISO 8601 timestamp string into a Pendulum DateTime.
+
+    Stricter than `parse_when` — only accepts a full timestamp (date + time
+    + offset), raising on anything else. Use this for round-tripping values
+    we produced ourselves via `DateTime.isoformat()`.
+
+    Args:
+        value: An ISO 8601 timestamp string.
+
+    Returns:
+        The parsed timezone-aware Pendulum DateTime.
+
+    Raises:
+        ValueError: If `value` doesn't parse to a full timestamp.
+    """
+    parsed = pendulum.parse(value)
+    if not isinstance(parsed, pendulum.DateTime):
+        msg = f"expected ISO 8601 timestamp, got {type(parsed).__name__}: {value!r}"
+        raise ValueError(msg)
+    return parsed
+
+
 def pso8601(dt: datetime | pendulum.DateTime) -> str:
     """Format a datetime in PSO-8601 (the household register).
 
