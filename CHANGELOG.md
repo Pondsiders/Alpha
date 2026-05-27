@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.1.0 (2026-05-27)
+
+### Features
+
+- **ci**: Gate docker-publish on test job passing
+  ([#65](https://github.com/Pondsiders/Alpha/pull/65),
+  [`231e767`](https://github.com/Pondsiders/Alpha/commit/231e76724071ef4489a054a35b761dc847a431e6))
+
+
 ## v1.0.1 (2026-05-27)
 
 ### Bug Fixes
