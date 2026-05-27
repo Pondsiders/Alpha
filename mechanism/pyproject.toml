@@ -1,6 +1,6 @@
 [project]
 name = "mechanism"
-version = "0.0.1"
+version = "0.1.0"
 description = "Alpha's mechanism"
 requires-python = ">=3.12"
 dependencies = [
