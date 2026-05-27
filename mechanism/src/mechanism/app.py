@@ -22,6 +22,8 @@ from starlette.middleware import Middleware
 from starlette.routing import Mount
 
 from mechanism.cortex import mcp as cortex_mcp
+from mechanism.db import close_pool
+from mechanism.llm import close_llm_clients
 from mechanism.mechanism import mcp as mechanism_mcp
 from mechanism.origin_validation import OriginValidationMiddleware
 from mechanism.redis_client import close_redis_client
@@ -68,7 +70,8 @@ async def _lifespan(app: Starlette) -> AsyncGenerator[None]:
 
     LLM clients, the database pool, and the Redis client are lazy
     module-level singletons (``llm.py``, ``db.py``, ``redis_client.py``);
-    only Redis needs explicit teardown on shutdown.
+    each gets an explicit teardown on shutdown so warm reloads and test
+    boundaries don't leak FDs to Postgres, Redis, or the Bifrost gateway.
     """
     settings = get_settings()
 
@@ -91,6 +94,8 @@ async def _lifespan(app: Starlette) -> AsyncGenerator[None]:
             yield
     finally:
         await close_redis_client()
+        await close_pool()
+        await close_llm_clients()
 
 
 app = Starlette(

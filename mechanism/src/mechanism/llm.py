@@ -56,6 +56,22 @@ def get_embedding_model() -> str:
     return get_settings().embedding_model
 
 
+async def close_llm_clients() -> None:
+    """Close the singleton chat and embedding clients if they're open.
+
+    Called from the app lifespan. Closes the underlying httpx clients
+    held by AsyncOpenAI so warm reloads and test boundaries don't leak
+    connections to the Bifrost gateway.
+    """
+    global _chat_client, _embedding_client
+    if _chat_client is not None:
+        await _chat_client.close()
+        _chat_client = None
+    if _embedding_client is not None:
+        await _embedding_client.close()
+        _embedding_client = None
+
+
 def format_query_for_embedding(query: str) -> str:
     r"""Format a query string for Qwen 3 Embedding 4B's input.
 

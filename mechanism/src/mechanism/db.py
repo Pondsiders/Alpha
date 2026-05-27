@@ -54,3 +54,11 @@ async def get_pool() -> asyncpg.Pool:
             server_settings={"search_path": "public, extensions"},
         )
     return _pool
+
+
+async def close_pool() -> None:
+    """Close the singleton asyncpg pool if it's open. Called from the app lifespan."""
+    global _pool
+    if _pool is not None:
+        await _pool.close()
+        _pool = None
