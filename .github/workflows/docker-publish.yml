@@ -20,7 +20,14 @@ permissions:
   packages: write                   # required for pushing to GHCR
 
 jobs:
+  # Gate on the same test suite that runs on PRs and main pushes — pre-publish
+  # belt-and-suspenders. If tests fail, build-and-push doesn't run, no image
+  # ships. test.yml is callable via workflow_call.
+  test:
+    uses: ./.github/workflows/test.yml
+
   build-and-push:
+    needs: test                     # only runs if test job succeeded
     runs-on: ubuntu-latest
 
     steps:
