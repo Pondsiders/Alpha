@@ -14,6 +14,20 @@ client and the Docker healthcheck using `urllib.request`) don't include
 an `Origin` header on their requests. Browser-based clients legitimately
 accessing the dev stack (MCP Inspector et al.) would carry their own
 Origin and can be added to the allow-list when that workflow shows up.
+
+Design constraint — uses `BaseHTTPMiddleware`, which buffers responses.
+Starlette's `BaseHTTPMiddleware` materializes streamed responses into
+memory before forwarding. FastMCP's Streamable HTTP transport uses SSE,
+so this middleware would re-buffer any streaming response that flows
+through it. In practice that's fine because the mechanism is purely
+request/response shaped: every tool call returns a complete JSON
+envelope, progress notifications don't reach the model (Claude Code
+doesn't surface them), and Claude Code doesn't support MCP elicitation
+or sampling — the two features that would require the bidirectional
+channel to stay open mid-tool. If a future feature relies on
+bidirectional streaming (e.g., if Claude Code ships elicitation or
+sampling support and we want to use them), rewrite this as a pure
+ASGI middleware first. See issue #34 for the analysis.
 """
 
 from __future__ import annotations
