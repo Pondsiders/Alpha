@@ -9,6 +9,12 @@ from mechanism.cortex.models import DiaryResult
 from mechanism.cortex.server import mcp
 from mechanism.db import get_pool
 
+_INSERT_SQL = """
+INSERT INTO cortex.diary (content, created_at)
+VALUES ($1, $2)
+RETURNING id, created_at
+"""
+
 
 @mcp.tool(
     description=(
@@ -34,11 +40,9 @@ async def add_to_diary(content: str) -> DiaryResult:
         The id and timestamp of the newly-stored entry.
     """
     pool = await get_pool()
+    now = clock.now()
     async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            "INSERT INTO cortex.diary (content) VALUES ($1) RETURNING id, created_at",
-            content,
-        )
+        row = await conn.fetchrow(_INSERT_SQL, content, now)
     if row is None:
         msg = "INSERT INTO cortex.diary did not RETURNING a row"
         raise RuntimeError(msg)
