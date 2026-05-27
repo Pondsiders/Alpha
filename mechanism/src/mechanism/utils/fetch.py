@@ -21,22 +21,39 @@ _MAX_BODY_BYTES = 5 * 1024 * 1024  # 5 MB ceiling on response body
 
 
 async def _get(url: str, *, headers: dict[str, str] | None = None) -> httpx.Response | None:
-    """GET with our standard timeout + size guard. Returns None on transport or size failure."""
+    """GET with our standard timeout + size guard. Returns None on transport or size failure.
+
+    The size guard runs *during* the download: bytes are streamed and
+    accumulated chunk by chunk, and the response is rejected the moment
+    the running total exceeds `_MAX_BODY_BYTES`. This bounds memory at
+    the ceiling even when the server omits Content-Length.
+    """
     async with httpx.AsyncClient(timeout=_TIMEOUT, follow_redirects=True) as client:
         try:
-            resp = await client.get(url, headers=headers)
+            async with client.stream("GET", url, headers=headers) as resp:
+                # Honor an honest Content-Length up front — avoid even starting
+                # to buffer a body the server has already declared too large.
+                content_length = resp.headers.get("content-length")
+                if content_length is not None:
+                    try:
+                        if int(content_length) > _MAX_BODY_BYTES:
+                            return None
+                    except ValueError:
+                        pass
+
+                buf = bytearray()
+                async for chunk in resp.aiter_bytes():
+                    buf.extend(chunk)
+                    if len(buf) > _MAX_BODY_BYTES:
+                        return None
+                # Hand the accumulated body to the Response so downstream
+                # callers can use .text / .content as usual after the stream
+                # context exits.
+                body = bytes(buf)
         except httpx.HTTPError:
             return None
 
-    content_length = resp.headers.get("content-length")
-    if content_length is not None:
-        try:
-            if int(content_length) > _MAX_BODY_BYTES:
-                return None
-        except ValueError:
-            pass
-    if len(resp.content) > _MAX_BODY_BYTES:
-        return None
+    resp._content = body  # pyright: ignore[reportPrivateUsage]
     return resp
 
 

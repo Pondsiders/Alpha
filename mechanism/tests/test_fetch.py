@@ -9,7 +9,8 @@ to a public IP before respx intercepts the actual GET.
 
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import AsyncIterator
+from typing import Any, final, override
 
 import httpx
 import pytest
@@ -17,6 +18,7 @@ import respx
 from fastmcp import Client
 from fastmcp.exceptions import ToolError
 
+from mechanism.utils import fetch as fetch_module
 from mechanism.utils import mcp
 
 
@@ -120,3 +122,70 @@ async def test_ssrf_rejects_unsupported_scheme() -> None:
     """file:// or other schemes must be rejected."""
     with pytest.raises(ToolError, match="scheme"):
         _ = await _call_fetch("file:///etc/passwd")
+
+
+@final
+class _CountingByteStream(httpx.AsyncByteStream):
+    """An async byte stream that records how many chunks it has yielded.
+
+    Lets the oversized-body test assert that the fetcher bailed out
+    mid-stream rather than buffering the whole body.
+    """
+
+    def __init__(self, chunk: bytes, n_chunks: int) -> None:
+        self._chunk = chunk
+        self._n_chunks = n_chunks
+        self.chunks_yielded = 0
+
+    @override
+    async def __aiter__(self) -> AsyncIterator[bytes]:
+        for _ in range(self._n_chunks):
+            self.chunks_yielded += 1
+            yield self._chunk
+
+    @override
+    async def aclose(self) -> None:
+        return None
+
+
+@respx.mock
+async def test_oversized_body_without_content_length_is_rejected_mid_stream(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A server that omits Content-Length must not be able to OOM us.
+
+    Streams 1 KB chunks adding up to 64 KB with no Content-Length header,
+    against a 4 KB ceiling. The fetcher must reject the response after a
+    handful of chunks — *not* drain the whole body first.
+    """
+    monkeypatch.setattr(fetch_module, "_MAX_BODY_BYTES", 4 * 1024)
+
+    chunk_size = 1024
+    total_chunks = 64  # 64 KB per call — well over the 4 KB ceiling
+    streams: list[_CountingByteStream] = []
+
+    def make_response(request: httpx.Request) -> httpx.Response:  # pyright: ignore[reportUnusedParameter]
+        # Fresh stream per call so each tier's GET starts from a full body.
+        stream = _CountingByteStream(b"x" * chunk_size, total_chunks)
+        streams.append(stream)
+        return httpx.Response(200, headers={"content-type": "text/html"}, stream=stream)
+
+    _ = respx.get("https://example.com/huge").mock(side_effect=make_response)
+    # Tier 2 variants — return 404 so we fall through to tier 3 and then fail.
+    _ = respx.get("https://example.com/huge.md").mock(return_value=httpx.Response(404))
+    _ = respx.get("https://example.com/huge.mdx").mock(return_value=httpx.Response(404))
+
+    with pytest.raises(ToolError, match="transport error or body too large"):
+        _ = await _call_fetch("https://example.com/huge")
+
+    # The fetcher hit the oversized URL at least once (tier 1 and tier 3
+    # both call it). Every stream we handed out must have been abandoned
+    # well before yielding all 64 chunks — proving the size check fires
+    # mid-stream rather than after the whole body lands in memory.
+    assert streams, "expected at least one streaming GET against /huge"
+    for s in streams:
+        assert s.chunks_yielded < total_chunks
+        # Ceiling is 4 KB; with 1 KB chunks the fetcher needs at most 5
+        # chunks (4 to reach the limit, 1 more to exceed it). Leave a
+        # little headroom for httpx-internal buffering nuance.
+        assert s.chunks_yielded <= 10
