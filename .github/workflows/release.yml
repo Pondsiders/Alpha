@@ -1,0 +1,60 @@
+# Release pipeline: python-semantic-release bumps the version, regenerates
+# CHANGELOG.md, commits, tags, and creates a GitHub Release.
+#
+# The tag push triggers .github/workflows/docker-publish.yml, which builds
+# and pushes the image to GHCR. The full chain is: PR merges → PSR fires →
+# version bump + changelog + tag + release → Docker workflow fires → image
+# at ghcr.io/<owner>/<repo>:<version>.
+#
+# Fixotron's installation token is used (not the default GITHUB_TOKEN) so:
+#   1. PSR can push the release commit + tag through main's branch protection
+#      (Fixotron is in the bypass list).
+#   2. The tag push it produces triggers downstream workflows. (Pushes made
+#      with the built-in GITHUB_TOKEN don't trigger other workflows; pushes
+#      from an external identity like a GitHub App's installation token do.)
+
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:                # manual trigger for recovery / testing
+
+permissions:
+  contents: write                   # PSR needs to push commits and tags
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: release-${{ github.ref_name }}
+      cancel-in-progress: false     # never cancel a release mid-run
+
+    steps:
+      - name: Mint Fixotron installation token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.FIXOTRON_APP_ID }}
+          private-key: ${{ secrets.FIXOTRON_PRIVATE_KEY }}
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          fetch-depth: 0            # PSR needs full history for commit analysis
+          ref: ${{ github.ref_name }}
+
+      - name: Force release branch to workflow sha
+        # Belt-and-suspenders: in case another push lands while we're spinning
+        # up, pin to the sha that triggered the workflow rather than the
+        # current branch tip.
+        run: git reset --hard ${{ github.sha }}
+
+      - name: Run python-semantic-release
+        uses: python-semantic-release/python-semantic-release@v10.5.3
+        with:
+          github_token: ${{ steps.app-token.outputs.token }}
+          directory: mechanism      # pyproject.toml lives under mechanism/
+          git_committer_name: Fixotron
+          git_committer_email: 288168714+fixotron[bot]@users.noreply.github.com

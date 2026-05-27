@@ -80,3 +80,23 @@ reportMissingImports = "error"
 # linter babysitting our use of `Any` at boundaries we control.
 reportExplicitAny = false
 reportAny = false
+
+# python-semantic-release config. The release workflow (.github/workflows/release.yml)
+# runs `semantic-release version` from this directory on push to main; it parses
+# Conventional Commits since the last tag, bumps `version` above, regenerates the
+# repo-root CHANGELOG.md, commits the changes, creates the git tag, and creates
+# a GitHub Release. Tag push then triggers .github/workflows/docker-publish.yml,
+# which builds and pushes the image to GHCR.
+[tool.semantic_release]
+version_toml = ["pyproject.toml:project.version"]
+branch = "main"
+build_command = ""                          # we don't build a wheel — application, not library
+upload_to_pypi = false
+upload_to_vcs_release = true                # attach autogen notes to the GitHub Release
+commit_parser = "conventional"
+commit_message = "chore(release): {version} [skip ci]"
+tag_format = "v{version}"
+
+[tool.semantic_release.changelog]
+changelog_file = "../CHANGELOG.md"          # at repo root, not inside mechanism/
+exclude_commit_patterns = ['''^chore\(release\):''']
