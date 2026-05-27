@@ -20,7 +20,7 @@ Per-deploy identity (compose project name, tailscale hostname) lives in a `compo
 
 All `just` recipes run from the repo root; all `uv` commands run from `mechanism/`.
 
-Dev environment (Postgres+pgvector, Redis, and `mechanism` with uvicorn on `127.0.0.1:8001`). Compose project name is `mechanism-dev`. DB ports bind to `127.0.0.1` so two dev stacks can coexist without colliding on host networking.
+Dev environment (Postgres+pgvector, Redis, and `mechanism` with uvicorn on `127.0.0.1:8001`). Compose project name is `mechanism-dev`. DB ports bind to `127.0.0.1` (Postgres on `5432`, Redis on `6379`) so they're not exposed beyond the loopback interface. The test stack uses different host ports (see below) so dev and test can run side-by-side; two dev stacks on the same host will collide on these ports.
 
 ```
 just dev-up                # start
