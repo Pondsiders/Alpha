@@ -65,9 +65,10 @@ async def test_timestamp_second_turn_includes_elapsed_bucket() -> None:
     redis = get_redis_client()
 
     # Seed an earlier value 5 minutes ago so clock.elapsed lands in the
-    # "5 minutes" bucket (< 60 minutes → "N minutes").
+    # "5 minutes" bucket (< 60 minutes → "N minutes"). Stored as UTC ISO
+    # to match what production now writes.
     earlier = clock.now().subtract(minutes=5)
-    _ = await redis.set(f"last-msg:{session_id}", earlier.isoformat(), ex=86400)
+    _ = await redis.set(f"last-msg:{session_id}", clock.utc_iso(earlier), ex=86400)
 
     async with Client(mcp) as client:
         result = await client.call_tool("timestamp", {"session_id": session_id})

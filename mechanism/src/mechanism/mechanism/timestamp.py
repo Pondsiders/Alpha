@@ -43,11 +43,13 @@ async def timestamp(session_id: str) -> dict[str, dict[str, str]]:
         now = clock.now()
         key = f"last-msg:{session_id}"
 
-        # Atomic read-and-update: write the new timestamp, return the old
-        # one (or None if this is the first turn). Single round trip; no
-        # window between read and write where the value could be stale.
+        # Atomic read-and-update: write the new timestamp (as UTC ISO,
+        # so storage matches the wire/Postgres convention — carry the
+        # universal, render the local), return the old one or None if
+        # this is the first turn. Single round trip; no window between
+        # read and write where the value could be stale.
         old_iso: str | None = await redis.set(
-            key, now.isoformat(), ex=_LAST_MSG_TTL_SECONDS, get=True
+            key, clock.utc_iso(now), ex=_LAST_MSG_TTL_SECONDS, get=True
         )
 
         sent_line = f"The user sent this message on {clock.pso8601(now)}."
