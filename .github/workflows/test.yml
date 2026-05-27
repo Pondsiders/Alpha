@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Callable from other workflows (e.g. docker-publish.yml gates its build
+  # on `uses: ./.github/workflows/test.yml`). Same job runs regardless of
+  # trigger, so the pre-publish gate test is identical to the merge-gate test.
+  workflow_call:
 
 jobs:
   pytest:
