@@ -94,8 +94,19 @@ build_command = ""                          # we don't build a wheel — applica
 upload_to_pypi = false
 upload_to_vcs_release = true                # attach autogen notes to the GitHub Release
 commit_parser = "conventional"
-commit_message = "chore(release): {version} [skip ci]"
+# No `[skip ci]` — that flag, on a `git push origin main --tags`, suppresses
+# ALL workflows for the push including the tag-push event, which would mean
+# docker-publish.yml (listening on `tags: ['v*']`) never fires. To prevent
+# release.yml from triggering recursively on PSR's own commit, see the actor
+# guard in `.github/workflows/release.yml`.
+commit_message = "chore(release): {version}"
 tag_format = "v{version}"
+# Stay in 0.x if we ever go back there. (Currently irrelevant — we're at 1.x —
+# but documents the intent and protects future 0.x experimentation.) With the
+# default `major_on_zero = true`, the FIRST minor bump in 0.x promotes to 1.0.0
+# (PSR interprets "minor in 0.x" as the project asserting stability). Setting
+# false keeps minor and breaking changes inside 0.x until we explicitly graduate.
+major_on_zero = false
 
 [tool.semantic_release.changelog]
 changelog_file = "../CHANGELOG.md"          # at repo root, not inside mechanism/

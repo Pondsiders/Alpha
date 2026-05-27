@@ -25,6 +25,11 @@ permissions:
 
 jobs:
   release:
+    # No-op when the push came from PSR's own release commit (pushed via
+    # Fixotron's installation token). Prevents recursive triggering without
+    # using `[skip ci]` in the commit message — which would also suppress
+    # the tag-push event and prevent docker-publish.yml from firing.
+    if: ${{ github.actor != 'fixotron[bot]' }}
     runs-on: ubuntu-latest
     concurrency:
       group: release-${{ github.ref_name }}
