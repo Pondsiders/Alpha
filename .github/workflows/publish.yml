@@ -1,0 +1,74 @@
+# Reusable publish building block: builds the image from the repo-root
+# Dockerfile and pushes it to GHCR.
+#
+# No triggers of its own — called by ship.yml (workflow_dispatch) as the final
+# stage of the release chain (test -> release -> publish), guarded so it only
+# runs when release actually cut a version. It builds at the tag release just
+# created and tags the image with that exact version.
+#
+# Image name defaults to the repo name: ghcr.io/pondsiders/alpha for this repo,
+# ghcr.io/pondsiders/rosemary for the fork. One less thing to change.
+#
+# Tags published: the exact version (1.2.0), the minor track (1.2), and
+# "latest". Compose files pin to whichever level of stability they want.
+
+name: publish
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Version to tag the image with, e.g. 1.2.0"
+        required: true
+        type: string
+      ref:
+        description: "Git ref to build, e.g. the release tag v1.2.0"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write                   # required for pushing to GHCR
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}    # the tag release just created
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          # GHCR lowercases the path automatically; ghcr.io/${{ github.repository }}
+          # resolves to ghcr.io/pondsiders/alpha for this repo.
+          images: ghcr.io/${{ github.repository }}
+          # Not tag-triggered anymore, so feed the version explicitly via the
+          # semver `value` override rather than letting it parse github.ref.
+          tags: |
+            type=semver,pattern={{version}},value=${{ inputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ inputs.version }}
+            type=raw,value=latest
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

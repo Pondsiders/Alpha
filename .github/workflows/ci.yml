@@ -1,0 +1,14 @@
+# CI orchestrator: runs the test building block on every pull request and on
+# pushes to main. This is the merge gate, and it keeps main green. It does NOT
+# release or publish — that's ship.yml, on manual dispatch.
+
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    uses: ./.github/workflows/test.yml

@@ -1,44 +1,46 @@
-# Release pipeline: python-semantic-release bumps the version, regenerates
-# CHANGELOG.md, commits, tags, and creates a GitHub Release.
+# Reusable release building block: python-semantic-release bumps the version,
+# regenerates CHANGELOG.md, commits, tags, and creates a GitHub Release.
 #
-# The tag push triggers .github/workflows/docker-publish.yml, which builds
-# and pushes the image to GHCR. The full chain is: PR merges → PSR fires →
-# version bump + changelog + tag + release → Docker workflow fires → image
-# at ghcr.io/<owner>/<repo>:<version>.
+# No triggers of its own — called by ship.yml (workflow_dispatch) as the second
+# stage of the release chain (test -> release -> publish). It exposes the
+# released version so the publish stage knows what to build:
+#   outputs.released  "true" when a release was actually cut
+#   outputs.version   the new version (no leading v), e.g. 1.2.0
+#   outputs.tag       the new git tag, e.g. v1.2.0
 #
-# Mr. Frogbot's installation token is used (not the default GITHUB_TOKEN) so:
-#   1. PSR can push the release commit + tag through main's branch protection
-#      (Mr. Frogbot is in the bypass list).
-#   2. The tag push it produces triggers downstream workflows. (Pushes made
-#      with the built-in GITHUB_TOKEN don't trigger other workflows; pushes
-#      from an external identity like a GitHub App's installation token do.)
+# Mr. Frogbot's installation token is used (not the default GITHUB_TOKEN) so PSR
+# can push the release commit + tag through main's branch protection (Mr.
+# Frogbot is in the bypass list).
 #
 # Secret names are still `FIXOTRON_*` for historical reasons (the App was
-# originally named Fixotron, renamed 2026-05-27). The values are the App ID
-# and private key, which survived the rename — so the secrets still work.
+# originally named Fixotron, renamed 2026-05-27). The values are the App ID and
+# private key, which survived the rename — so the secrets still work.
 
-name: Release
+name: release
 
 on:
-  push:
-    branches: [main]
-  workflow_dispatch:                # manual trigger for recovery / testing
+  workflow_call:
+    outputs:
+      released:
+        description: '"true" when a new release was created'
+        value: ${{ jobs.release.outputs.released }}
+      version:
+        description: "The newly released version (no leading v), e.g. 1.2.0"
+        value: ${{ jobs.release.outputs.version }}
+      tag:
+        description: "The new git tag, e.g. v1.2.0"
+        value: ${{ jobs.release.outputs.tag }}
 
 permissions:
   contents: write                   # PSR needs to push commits and tags
 
 jobs:
   release:
-    # No-op when the push came from PSR's own release commit (pushed via
-    # Mr. Frogbot's installation token). Prevents recursive triggering
-    # without using the skip-ci marker in the commit message — which would
-    # also suppress the tag-push event and prevent docker-publish.yml from
-    # firing.
-    if: ${{ github.actor != 'mrfrogbot[bot]' }}
     runs-on: ubuntu-latest
-    concurrency:
-      group: release-${{ github.ref_name }}
-      cancel-in-progress: false     # never cancel a release mid-run
+    outputs:
+      released: ${{ steps.psr.outputs.released }}
+      version: ${{ steps.psr.outputs.version }}
+      tag: ${{ steps.psr.outputs.tag }}
 
     steps:
       - name: Mint Mr. Frogbot installation token
@@ -55,13 +57,8 @@ jobs:
           fetch-depth: 0            # PSR needs full history for commit analysis
           ref: ${{ github.ref_name }}
 
-      - name: Force release branch to workflow sha
-        # Belt-and-suspenders: in case another push lands while we're spinning
-        # up, pin to the sha that triggered the workflow rather than the
-        # current branch tip.
-        run: git reset --hard ${{ github.sha }}
-
       - name: Run python-semantic-release
+        id: psr
         uses: python-semantic-release/python-semantic-release@v10.5.3
         with:
           github_token: ${{ steps.app-token.outputs.token }}
