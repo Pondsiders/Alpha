@@ -1,0 +1,40 @@
+# Release orchestrator ("ship it"): the full chain, on manual dispatch only.
+# Runs test -> release -> publish, each a reusable building block, wired by
+# `needs`. Publish only runs when release actually cut a new version.
+#
+# This replaces the old "release on every push to main + tag-triggered docker
+# publish" flow. Releases are now a deliberate act: commits accumulate on main
+# (each gated by ci.yml), then someone runs this workflow when it's time to
+# ship.
+
+name: ship
+
+on:
+  workflow_dispatch:
+
+# Never let two ships run at once.
+concurrency:
+  group: ship-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write                   # release: push the commit + tag
+  packages: write                   # publish: push the image to GHCR
+
+jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+
+  release:
+    needs: test
+    uses: ./.github/workflows/release.yml
+    secrets: inherit
+
+  publish:
+    needs: release
+    if: ${{ needs.release.outputs.released == 'true' }}
+    uses: ./.github/workflows/publish.yml
+    with:
+      version: ${{ needs.release.outputs.version }}
+      ref: ${{ needs.release.outputs.tag }}
+    secrets: inherit

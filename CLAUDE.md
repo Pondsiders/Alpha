@@ -8,7 +8,33 @@ Don't merge any code to main until Jeffery has had a chance to review and approv
 
 ## Git conventions
 
-Use conventional-commit style for commit messages.
+Commit messages **and PR titles** follow [Conventional Commits](https://www.conventionalcommits.org/). This isn't cosmetic: we squash-merge, and python-semantic-release (PSR) parses the resulting commit subject to compute the version bump and changelog. Under squash-merge the **PR title becomes that subject**, so a malformed title means a wrong or missing release. The `pr-title` workflow lints every PR title against the vocabulary below (a required check); its `types` list and PSR's `allowed_tags` are two copies of this one table and must stay in sync.
+
+Format is `type(optional-scope): subject` — e.g. `feat(cortex): add semantic dedup`.
+
+| type | bump | changelog section |
+|------|------|-------------------|
+| `feat` | minor | Features |
+| `fix` | patch | Bug Fixes |
+| `perf` | patch | Performance Improvements |
+| `build` | none | Build System |
+| `chore` | none | Chores |
+| `ci` | none | Continuous Integration |
+| `docs` | none | Documentation |
+| `style` | none | Code Style |
+| `refactor` | none | Refactoring |
+| `test` | none | Testing |
+
+Only `feat`/`fix`/`perf` move the version. **Breaking changes** bump major: append `!` after the type/scope (`feat!:`, `feat(api)!:`) or add a `BREAKING CHANGE:` paragraph to the commit body.
+
+Releases are **manual**: pushing to `main` only runs tests; a maintainer runs the `ship` workflow (`workflow_dispatch`) to cut a version. Each PR is one changelog line driven by its title — the squash body is blank by default, so a 100-commit branch is still one entry. To itemize one PR into several entries, hand-write conventional bullets into the squash commit body at merge time; PSR parses each as its own entry, highest bump wins:
+
+```
+fix: clear the backlog (#123)
+
+* fix: thing one
+* feat: thing two
+```
 
 ## Repository layout
 

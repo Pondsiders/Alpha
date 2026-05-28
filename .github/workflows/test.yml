@@ -1,12 +1,13 @@
+# Reusable test building block: pytest + ruff + basedpyright.
+#
+# No triggers of its own — it's called by the orchestrators:
+#   - ci.yml   (pull_request + push to main): the merge / main gate
+#   - ship.yml (workflow_dispatch): the first stage of the release chain
+# The same job runs regardless of caller, so the gate is identical everywhere.
+
 name: test
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-  # Callable from other workflows (e.g. docker-publish.yml gates its build
-  # on `uses: ./.github/workflows/test.yml`). Same job runs regardless of
-  # trigger, so the pre-publish gate test is identical to the merge-gate test.
   workflow_call:
 
 jobs:

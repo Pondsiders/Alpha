@@ -1,0 +1,41 @@
+# Lints the PR title against our conventional-commit vocabulary. Under
+# squash-merge the PR title becomes the commit subject PSR parses for the
+# version bump + changelog, so a malformed title means a wrong/missing release.
+#
+# The `types` list MUST mirror PSR's allowed_tags (commit_parser=conventional);
+# the canonical vocabulary lives in CLAUDE.md ("Git conventions").
+#
+# Trigger notes: `pull_request` (not `pull_request_target`) — all contributors
+# have write access and there are no external forks, and this way a title fix in
+# the PR is re-validated immediately. `synchronize` is included because this is
+# a required check and required checks must run on each new push.
+
+name: pr-title
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  validate-title:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amannn/action-semantic-pull-request@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          requireScope: false
+          types: |
+            feat
+            fix
+            perf
+            build
+            chore
+            ci
+            docs
+            style
+            refactor
+            test
