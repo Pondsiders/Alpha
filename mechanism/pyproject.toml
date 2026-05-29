@@ -36,6 +36,11 @@ eval = [
     "pydantic-evals[logfire]>=1.102.0",
 ]
 
+migrations = [
+    "alembic>=1.18.4",
+    "psycopg[binary]>=3.3.4",
+]
+
 [build-system]
 requires = ["uv_build>=0.5,<0.12"]
 build-backend = "uv_build"
@@ -68,6 +73,9 @@ convention = "google"
 "__init__.py" = ["D104"]
 "__main__.py" = ["D100"]
 "tests/**/*.py" = ["S101", "S106", "S603", "S607", "D100", "D101", "D102", "D103"]
+# Alembic stamps revision metadata into the module docstring; its first line
+# (the migration message) won't always end in punctuation.
+"alembic/versions/*.py" = ["D415"]
 
 [tool.basedpyright]
 include = ["src", "tests"]

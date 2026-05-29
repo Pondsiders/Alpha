@@ -26,4 +26,4 @@ mechanism/evals/suites/memories/label.py
 mechanism/evals/suites/memories/sample-*.json
 
 # dev database dump
-alpha.dump
+rosemary-prod.dump

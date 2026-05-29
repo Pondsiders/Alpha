@@ -38,7 +38,7 @@ fix: clear the backlog (#123)
 
 ## Repository layout
 
-This is a small monorepo. The only source tree is `mechanism/` (a Python package); everything at the repo root is infra glue: a `Dockerfile` and `compose.yml` for production, `compose-dev.yml` for the local dev stack, `compose-test.yml` for the isolated test stack, a `justfile`, a `.env` shared by dev/prod, and a GitHub Actions workflow under `.github/`.
+This is a small monorepo. The only source tree is `mechanism/` (a Python package); everything at the repo root is infra glue: a `Dockerfile` and `compose.yml` for production, `compose-dev.yml` for the local dev stack, a `justfile`, a `.env` shared by dev/prod, and GitHub Actions workflows under `.github/`.
 
 Per-deploy identity (compose project name, tailscale hostname) lives in a `compose.override.yml` next to `compose.yml` — gitignored, copied from `compose.override.yml.example` on each deploy box and edited for that deploy's name. Docker Compose auto-merges the override; the source tree stays fork-identical, so divergence lives in deploy overrides, not in code.
 
@@ -46,7 +46,7 @@ Per-deploy identity (compose project name, tailscale hostname) lives in a `compo
 
 All `just` recipes run from the repo root; all `uv` commands run from `mechanism/`.
 
-Dev environment (Postgres+pgvector, Redis, and `mechanism` with uvicorn on `127.0.0.1:8001`). Compose project name is `mechanism-dev`. DB ports bind to `127.0.0.1` (Postgres on `5432`, Redis on `6379`) so they're not exposed beyond the loopback interface. The test stack uses different host ports (see below) so dev and test can run side-by-side; two dev stacks on the same host will collide on these ports.
+Dev environment (Postgres+pgvector, Redis, and `mechanism` with uvicorn on `127.0.0.1:8001`). Compose project name is `mechanism-dev`. DB ports bind to `127.0.0.1` (Postgres on `5432`, Redis on `6379`) so they're not exposed beyond the loopback interface. Two dev stacks on the same host will collide on these ports. (Tests don't use this stack — they spin up their own ephemeral containers; see below.)
 
 ```
 just dev-up                # start
@@ -55,13 +55,10 @@ just dev-init <dump.sql>   # WIPE volumes and pg_restore from a dump
 just dev-logs [-f] [svc]   # tail container logs
 ```
 
-Tests run against a separate isolated stack (Postgres on `127.0.0.1:55432`, Redis on `127.0.0.1:56379`) so the dev stack can stay running alongside.
+Tests bring up their own ephemeral pgvector + Redis containers via Testcontainers (random host ports, so multiple sessions — e.g. parallel agents — never collide), so the dev stack can keep running alongside.
 
 ```
-just test-up               # bring up the test stack
-just test-init             # WIPE test volumes and load tests/fixtures/schema.sql
-just test                  # run pytest (auto-starts test-up; rewrites DATABASE_URL/REDIS_URL)
-just test-reset            # test-init + test, for a known-clean run
+just test                  # run pytest (Testcontainers spin up + tear down per session)
 just seed-generate         # re-materialize seed.sql from seed.sql.template (embeddings via Bifrost)
 ```
 
@@ -70,13 +67,13 @@ Server, lint, typecheck (from `mechanism/`):
 ```
 uv sync
 uv run uvicorn mechanism.app:app --host 127.0.0.1 --port 8000
-uv run pytest                                    # prefer `just test` — it sets up the test stack
+uv run pytest                                    # prefer `just test` — it sets the test env vars
 uv run ruff check
 uv run ruff format
 uv run basedpyright
 ```
 
-`pytest` is `asyncio_mode=auto`. `conftest.py` refuses to run unless `TEST_DATABASE_URL` and `TEST_REDIS_URL` are set, then rewrites `DATABASE_URL` and `REDIS_URL` from them at session start — a guard against pointing tests at a live dev or prod database. The LLM is mocked via the `mock_llm` fixture (monkeypatches `.create()` on the live OpenAI clients); only the wire is faked. Per-test `TRUNCATE` keeps DB state isolated. CI runs the same suite under `MECHANISM_CI=1` with services-blocks postgres+redis.
+`pytest` is `asyncio_mode=auto`. `conftest.py` spins up ephemeral pgvector + Redis containers via Testcontainers at session start and loads `tests/fixtures/schema.sql` into them, so tests never point at a live dev or prod database. The LLM is mocked via the `mock_llm` fixture (monkeypatches `.create()` on the live OpenAI clients); when no Bifrost credentials are present (CI, or a fresh checkout), a blanket monkeypatch returns valid empty shapes — `MECHANISM_CI=1` forces that path. Per-test `TRUNCATE` keeps DB state isolated. CI (`test.yml`) runs the same suite with `MECHANISM_CI=1`; the Postgres/Redis come from Testcontainers, not GitHub `services:` blocks.
 
 Pre-commit is installed (`uv run pre-commit install` once per clone). The hooks run ruff check, ruff format, and basedpyright on commit. Don't bypass with `--no-verify` — fix the hook config if a hook is broken, fix the underlying issue if it isn't.
 

@@ -31,6 +31,17 @@ dev-init dump:
         --no-acl \
         < {{dump}}
 
+# Rebuild the dev DB from the prod dump and bring it to head under Alembic.
+# The repeatable prototyping loop — answers "how do I get back to a known
+# state?": wipe + restore (dev-init), then run every migration forward.
+# The documentary baseline is a no-op, so upgrading a freshly-restored
+# (already-populated) DB is safe: the baseline runs nothing, and the schema
+# transforms apply to the restored tables. On PROD we `stamp` the baseline
+# instead of running it — identical end state, because the baseline is empty.
+dev-reset dump="rosemary-prod.dump":
+    just dev-init {{dump}}
+    cd mechanism && uv run --group migrations alembic upgrade head
+
 # Run the pytest suite. conftest.py spins up ephemeral pgvector + redis
 # containers via Testcontainers, loads schema.sql, and tears them down at
 # session end. Multiple sessions (e.g. parallel issue-fixer agents) can

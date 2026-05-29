@@ -1,50 +1,54 @@
 name: mechanism-dev
 
 services:
-  mechanism:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    ports:
-      - "8001:8000"
-    env_file:
-      - .env
-    environment:
-      # Point at the in-stack Postgres and Redis, overriding any .env values.
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/postgres
-      REDIS_URL: redis://redis:6379/0
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    volumes:
-      # Bind-mount source for uvicorn --reload. uv sync installs the project
-      # in editable mode by default, so imports resolve through this path.
-      - ./mechanism/src:/app/mechanism/src:ro
-    command:
-      - uvicorn
-      - mechanism.app:app
-      - --host
-      - 0.0.0.0
-      - --port
-      - "8000"
-      - --reload
-      - --reload-dir
-      - /app/mechanism/src
-      - --reload-include
-      - "*.md"
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          'python -c "import urllib.request; urllib.request.urlopen(''http://127.0.0.1:8000/mechanism/livez'').read()"',
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
+  # TEMPORARILY DISABLED during issue #2 (Alembic baseline). The forked code
+  # expects the cortex.* schema, but the restored DB is still Rosemary's old
+  # public.* shape, so the server can't run until #3 migrates it. Re-enable
+  # (uncomment) once the schema migration lands.
+  # mechanism:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   restart: unless-stopped
+  #   ports:
+  #     - "8001:8000"
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     # Point at the in-stack Postgres and Redis, overriding any .env values.
+  #     DATABASE_URL: postgresql://postgres:postgres@postgres:5432/postgres
+  #     REDIS_URL: redis://redis:6379/0
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   volumes:
+  #     # Bind-mount source for uvicorn --reload. uv sync installs the project
+  #     # in editable mode by default, so imports resolve through this path.
+  #     - ./mechanism/src:/app/mechanism/src:ro
+  #   command:
+  #     - uvicorn
+  #     - mechanism.app:app
+  #     - --host
+  #     - 0.0.0.0
+  #     - --port
+  #     - "8000"
+  #     - --reload
+  #     - --reload-dir
+  #     - /app/mechanism/src
+  #     - --reload-include
+  #     - "*.md"
+  #   healthcheck:
+  #     test:
+  #       [
+  #         "CMD-SHELL",
+  #         'python -c "import urllib.request; urllib.request.urlopen(''http://127.0.0.1:8000/mechanism/livez'').read()"',
+  #       ]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #     start_period: 30s
 
   postgres:
     image: pgvector/pgvector:pg17
